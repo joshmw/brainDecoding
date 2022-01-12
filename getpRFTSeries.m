@@ -362,8 +362,6 @@ title('Receptive Field and Noise Correlations between v1 and v3'); xlabel('KL Di
 
 
 
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% distance and noise correlation %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -481,10 +479,104 @@ title('Distance and Noise Correlations between v1 and v3'); xlabel('Distance bet
 
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%
+%% distance vs rf cor %%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+% first, do v1 %
+figure(20);hold on;
+
+for i = 1:length(v1kldCor); scatter(v1dist(i,:),v1kldCor(i,:)); end;
+
+v1distArr = reshape(v1dist,[1 length(v1dist)^2]); v1kldCorArr = reshape(v1kldCor,[1 length(v1kldCor)^2]);
+[v1distArr,sortOrder] = sort(v1distArr); v1kldCorArr = v1kldCorArr(sortOrder);
+bins = [];kldCorAvgs = []; step = .25
+for bin = 0:step:40
+    if sum( (bin < v1distArr) & (v1distArr < bin+step) ) > 20
+        kldCorAvg = median(v1kldCorArr((bin < v1distArr) & (v1distArr < bin+step)));
+        bins = [bins bin]; kldCorAvgs = [kldCorAvgs kldCorAvg];
+    end
+end
+plot(bins,kldCorAvgs,'black','LineWidth',8);ylim([0,25]);
+title('V1 Distance and RF Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('RF correlation between voxels i,j');
 
 
+% do v2 %
+figure(21);hold on;
+
+for i = 1:length(v2kldCor); scatter(v2dist(i,:),v2kldCor(i,:)); end;
+
+v2distArr = reshape(v2dist,[1 length(v2dist)^2]); v2kldCorArr = reshape(v2kldCor,[1 length(v2kldCor)^2]);
+[v2distArr,sortOrder] = sort(v2distArr); v2kldCorArr = v2kldCorArr(sortOrder);
+bins = [];kldCorAvgs = []; step = .25
+for bin = 0:step:40
+    if sum( (bin < v2distArr) & (v2distArr < bin+step) ) > 20
+        kldCorAvg = median(v2kldCorArr((bin < v2distArr) & (v2distArr < bin+step)));
+        bins = [bins bin]; kldCorAvgs = [kldCorAvgs kldCorAvg];
+    end
+end
+plot(bins,kldCorAvgs,'black','LineWidth',8);ylim([0,25]);
+title('V2 Distance and RF Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('RF correlation between voxels i,j');
 
 
+% do v3 %
+figure(22);hold on;
+
+for i = 1:length(v3kldCor); scatter(v3dist(i,:),v3kldCor(i,:)); end;
+
+v3distArr = reshape(v3dist,[1 length(v3dist)^2]); v3kldCorArr = reshape(v3kldCor,[1 length(v3kldCor)^2]);
+[v3distArr,sortOrder] = sort(v3distArr); v3kldCorArr = v3kldCorArr(sortOrder);
+bins = [];kldCorAvgs = []; step = .25
+for bin = 0:step:40
+    if sum( (bin < v3distArr) & (v3distArr < bin+step) ) > 20
+        kldCorAvg = median(v3kldCorArr((bin < v3distArr) & (v3distArr < bin+step)));
+        bins = [bins bin]; kldCorAvgs = [kldCorAvgs kldCorAvg];
+    end
+end
+plot(bins,kldCorAvgs,'black','LineWidth',8);ylim([0,25]);
+title('V3 Distance and RF Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('RF correlation between voxels i,j');
+
+
+%between v1 and v2
+figure(23);hold on;
+
+for i = 1:min(size(v1v2kldCor)); scatter(v1v2dist(i,:),v1v2kldCor(i,:)); end;
+
+v1v2distArr = reshape(v1v2dist,[1 min(size(v1v2dist))*max(size(v1v2dist))]);
+v1v2kldCorArr = reshape(v1v2kldCor,[1 min(size(v1v2kldCor))*max(size(v1v2kldCor))]);
+[v1v2distArr,sortOrder] = sort(v1v2distArr); v1v2kldCorArr = v1v2kldCorArr(sortOrder);
+
+bins = [];kldCorAvgs = [];
+for bin = 0:step:45
+    if sum( (bin < v1v2distArr) & (v1v2distArr < bin+step) ) > 20
+        kldCorAvg = median(v1v2kldCorArr((bin < v1v2distArr) & (v1v2distArr < bin+step)));
+        bins = [bins bin]; kldCorAvgs = [kldCorAvgs kldCorAvg];
+    end
+end
+
+plot(bins,kldCorAvgs,'black','LineWidth',8);ylim([0,25]);
+title('Distance and RF Correlations between v1 and v2'); xlabel('Distance between voxels V1i, V2j (mm)'); ylabel('Divergence between voxels V1i, V2j (distance)');
+
+
+%between v1 and v3
+figure(24);hold on;
+
+for i = 1:min(size(v1v3kldCor)); scatter(v1v3dist(i,:),v1v3kldCor(i,:)); end;
+
+v1v3distArr = reshape(v1v3dist,[1 min(size(v1v3dist))*max(size(v1v3dist))]);
+v1v3kldCorArr = reshape(v1v3kldCor,[1 min(size(v1v3kldCor))*max(size(v1v3kldCor))]);
+[v1v3distArr,sortOrder] = sort(v1v3distArr); v1v3kldCorArr = v1v3kldCorArr(sortOrder);
+
+bins = [];kldCorAvgs = [];
+for bin = 0:step:45
+    if sum( (bin < v1v3distArr) & (v1v3distArr < bin+step) ) > 20
+        kldCorAvg = median(v1v3kldCorArr((bin < v1v3distArr) & (v1v3distArr < bin+step)));
+        bins = [bins bin]; kldCorAvgs = [kldCorAvgs kldCorAvg];
+    end
+end
+
+plot(bins,kldCorAvgs,'black','LineWidth',8);ylim([0,25]);
+title('Distance and RF Correlations between v1 and v3'); xlabel('Distance between voxels V1i, V3j'); ylabel('Divergence between voxel RFs V1i, V2j (distance)');
 
 
 
