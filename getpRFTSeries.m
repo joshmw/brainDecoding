@@ -7,9 +7,9 @@ function [rois cleanRois] = getpRFtSeries(overlayNum,scanNum)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 v = newView
-v = viewSet(v,'curGroup','Concatenation');
+v = viewSet(v,'curGroup','MotionComp');
 nScans = viewGet(v,'nScans');
-v = viewSet(v,'curScan',nScans);
+v = viewSet(v,'curScan',1); %remember to set the scan number and analysis you want. I will automate this later
 v = loadAnalysis(v,'pRFAnal/pRF');
 tSeries = loadTSeries(v);
 
@@ -20,7 +20,7 @@ v3 = loadROITSeries(v,'v3',1,1)
 
 rois = [v1 v2 v3]
 
-graphStuff = 0;
+graphStuff = 0; correlate = 0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Get the pRF-predicted time series of all voxels in the ROI %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -65,7 +65,7 @@ for voxel = 1:rois(roi).n
    rois(roi).vox.pRFtSeries(:,voxel) = m.modelResponse;
    rois(roi).vox.baselineNoise = rois(roi).vox.tSeries-rois(roi).vox.pRFtSeries;
    rois(roi).vox.measurementVar(voxel) = var(m.tSeries-m.modelResponse);
-   rois(roi).vox.rfStimOverlapTSeries(:,voxel) = m.rfStimCor(:); 
+   %rois(roi).vox.rfStimOverlapTSeries(:,voxel) = m.rfStimCor(:); 
   
    if mod(voxel,50) == 0
        disp(sprintf('(getpRFTSeries) Roi %i of %i; Voxel %i of %i',roi,length(rois),voxel,rois(roi).n));
@@ -99,7 +99,7 @@ cleanRois(roi).vox.baselineNoise = rois(roi).vox.baselineNoise(:,(eccMax>rois(ro
 cleanRois(roi).vox.x = rois(roi).vox.params(1,(eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth));
 cleanRois(roi).vox.y = rois(roi).vox.params(2,(eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth));
 cleanRois(roi).vox.rfstd = rois(roi).vox.params(3,(eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth));
-cleanRois(roi).vox.rfStimOverlapTSeries = rois(roi).vox.rfStimOverlapTSeries(:,(eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth))
+%cleanRois(roi).vox.rfStimOverlapTSeries = rois(roi).vox.rfStimOverlapTSeries(:,(eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth))
 cleanRois(roi).vox.pRFtSeries = rois(roi).vox.pRFtSeries(:,(eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth))
 cleanRois(roi).vox.scanCoords = rois(roi).scanCoords(:,(eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth))
 end
@@ -109,7 +109,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %% correlate voxel RFs %%
 %%%%%%%%%%%%%%%%%%%%%%%%%
-
+if correlate
 % trying KL divergence of multivariate gaussians %
 
 %v1 rf self correlation
@@ -157,7 +157,6 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
 end
 
 
-
 %%%%%%%%%%%%%%%%%%%%%%
 %% voxel distances %%
 %%%%%%%%%%%%%%%%%%%%%
@@ -203,15 +202,12 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
     end
 end
 
-
-
-
+end
 
 %%%%%%%%%%%
 %% graph %%
 %%%%%%%%%%%
 if graphStuff
-    
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% noise std in signal absent and present time frames %%
@@ -243,8 +239,6 @@ ylabel('Noise (% signal change)');
 end
 
 
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % noise and receptive field correlation %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -268,7 +262,7 @@ for bin = 0:step:40
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([0,20]);set(gca,'XDir','reverse');
-title('V1 Receptive Field and Noise Correlations'); xlabel('KL Divergence between voxel i,j RFs (distance)'); ylabel('Noise correlation between voxels i,j');
+title('V1 Receptive Field and Noise Correlations'); xlabel('KL Divergence between voxel i,j RFs (distance)'); ylabel('Noise correlation between voxels i,j (mm)');
 
 % second, do v2 %
 figure(12);hold on;subplot(1,2,1);hold on;
@@ -289,7 +283,7 @@ for bin = 0:step:40
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([0,20]);set(gca,'XDir','reverse');
-title('V2 Receptive Field and Noise Correlations'); xlabel('KL Divergence between voxels i,j RFs (distance)'); ylabel('Noise correlation between voxels i,j');
+title('V2 Receptive Field and Noise Correlations'); xlabel('KL Divergence between voxels i,j RFs (distance)'); ylabel('Noise correlation between voxels i,j (mm)');
 
 
 % third, do v3 %
@@ -311,7 +305,7 @@ for bin = 0:step:40
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([0,20]);set(gca,'XDir','reverse');
-title('V2 Receptive Field and Noise Correlations'); xlabel('KL Divergence between voxels i,j RFs (distance)'); ylabel('Noise correlation between voxels i,j');
+title('V2 Receptive Field and Noise Correlations'); xlabel('KL Divergence between voxels i,j RFs (distance)'); ylabel('Noise correlation between voxels i,j (mm)');
 
 
 %between v1 and v2
@@ -334,7 +328,7 @@ for bin = 0:step:45
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8); xlim([0,20]);set(gca,'XDir','reverse');
-title('Receptive Field and Noise Correlations between v1 and v2'); xlabel('KL Divergence between voxel V1i, V2j RFs (distance)'); ylabel('Noise correlation between voxel V1i, V2j');
+title('Receptive Field and Noise Correlations between v1 and v2'); xlabel('KL Divergence between voxel V1i, V2j RFs (distance)'); ylabel('Noise correlation between voxel V1i, V2j (mm)');
 
 
 %between v1 and v3
@@ -357,7 +351,7 @@ for bin = 0:step:45
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8); xlim([0,20]);set(gca,'XDir','reverse');
-title('Receptive Field and Noise Correlations between v1 and v3'); xlabel('KL Divergence between voxel V1i, V3j RFs (distance)'); ylabel('Noise correlation between voxel V1i, V3j');
+title('Receptive Field and Noise Correlations between v1 and v3'); xlabel('KL Divergence between voxel V1i, V3j RFs (distance)'); ylabel('Noise correlation between voxel V1i, V3j (mm)');
 
 
 
@@ -484,7 +478,7 @@ title('Distance and Noise Correlations between v1 and v3'); xlabel('Distance bet
 %%%%%%%%%%%%%%%%%%%%%%%%
 
 % first, do v1 %
-figure(20);hold on;
+figure(25);hold on;subplot(2,3,1);hold on;
 
 for i = 1:length(v1kldCor); scatter(v1dist(i,:),v1kldCor(i,:)); end;
 
@@ -498,11 +492,11 @@ for bin = 0:step:40
     end
 end
 plot(bins,kldCorAvgs,'black','LineWidth',8);ylim([0,25]);
-title('V1 Distance and RF Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('RF correlation between voxels i,j');
+title('V1 Distance and RF Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('KL divergence between voxel RFs i,j');
 
 
 % do v2 %
-figure(21);hold on;
+figure(25);hold on;subplot(2,3,2);hold on;
 
 for i = 1:length(v2kldCor); scatter(v2dist(i,:),v2kldCor(i,:)); end;
 
@@ -516,11 +510,11 @@ for bin = 0:step:40
     end
 end
 plot(bins,kldCorAvgs,'black','LineWidth',8);ylim([0,25]);
-title('V2 Distance and RF Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('RF correlation between voxels i,j');
+title('V2 Distance and RF Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('KL divergence between voxel RFs i,j');
 
 
 % do v3 %
-figure(22);hold on;
+figure(25);hold on;subplot(2,3,3);hold on;
 
 for i = 1:length(v3kldCor); scatter(v3dist(i,:),v3kldCor(i,:)); end;
 
@@ -534,11 +528,11 @@ for bin = 0:step:40
     end
 end
 plot(bins,kldCorAvgs,'black','LineWidth',8);ylim([0,25]);
-title('V3 Distance and RF Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('RF correlation between voxels i,j');
+title('V3 Distance and RF Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('KL divergence between voxel RFs i,j');
 
 
 %between v1 and v2
-figure(23);hold on;
+figure(25);hold on;subplot(2,3,4);hold on;
 
 for i = 1:min(size(v1v2kldCor)); scatter(v1v2dist(i,:),v1v2kldCor(i,:)); end;
 
@@ -555,11 +549,11 @@ for bin = 0:step:45
 end
 
 plot(bins,kldCorAvgs,'black','LineWidth',8);ylim([0,25]);
-title('Distance and RF Correlations between v1 and v2'); xlabel('Distance between voxels V1i, V2j (mm)'); ylabel('Divergence between voxels V1i, V2j (distance)');
+title('Distance and RF Correlations between v1 and v2'); xlabel('Distance between voxels V1i, V2j (mm)'); ylabel('KL divergence between voxel RFs V1i, V2j (distance)');
 
 
 %between v1 and v3
-figure(24);hold on;
+figure(25);hold on;subplot(2,3,5);hold on;
 
 for i = 1:min(size(v1v3kldCor)); scatter(v1v3dist(i,:),v1v3kldCor(i,:)); end;
 
@@ -576,12 +570,30 @@ for bin = 0:step:45
 end
 
 plot(bins,kldCorAvgs,'black','LineWidth',8);ylim([0,25]);
-title('Distance and RF Correlations between v1 and v3'); xlabel('Distance between voxels V1i, V3j'); ylabel('Divergence between voxel RFs V1i, V2j (distance)');
+title('Distance and RF Correlations between v1 and v3'); xlabel('Distance between voxels V1i, V3j'); ylabel('KL divergence between voxel RFs RFs V1i, V2j (distance)');
+
+
+
+
+end  %%%%% end of graphing stuff
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+dontdo = 0;if dontdo
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% old stuff i don't think is useful %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% signal to noise ratio %%
@@ -595,14 +607,10 @@ end
 
 
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% old stuff i don't think is useful %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-dontdo = 0;if dontdo
-    
-    
+   
+%%%%%%%%%%%%%%%%    
 % Eccentricity %
+%%%%%%%%%%%%%%%%
 figure(5); hold on;   
 scatter(graph.eccentricity,sqrt(graph.measurementVar)*100);
 %ylim([0,.0001]);
@@ -610,7 +618,10 @@ xlabel('Eccentricity');ylabel('Baseline std (% signal change)');title(sprintf('B
 p = polyfit(graph.eccentricity,sqrt(graph.measurementVar),1);
 plot(linspace(eccMin,eccMax),polyval(p,linspace(eccMin,eccMax)));
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%
 % Receptive field size %
+%%%%%%%%%%%%%%%%%%%%%%%%
 figure(6); hold on;
 scatter(graph.rfHalfWidth,sqrt(graph.measurementVar)*100);
 %ylim([0,.001]);
@@ -618,7 +629,10 @@ xlabel('rf HalfWidth');ylabel('Baseline std (% signal change)');title(sprintf('B
 p = polyfit(graph.rfHalfWidth,sqrt(graph.measurementVar),1);
 plot(linspace(rfWmin,rfWmax),polyval(p,linspace(rfWmin,rfWmax)));
 
+
+%%%%%%%%%%%%
 % Model r2 %
+%%%%%%%%%%%%
 figure(7); hold on;   
 scatter(graph.r2,sqrt(graph.measurementVar)*100);
 %ylim([0,.001]);
@@ -627,7 +641,9 @@ p = polyfit(graph.r2,sqrt(graph.measurementVar),1);
 plot(linspace(r2min,1),polyval(p,linspace(r2min,1)));
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Noise as a function of temporal dynamics %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 derivativeQuantile = .75
 figure(8); hold on;
 x = []; y = [];
@@ -659,8 +675,6 @@ title('Average and non-averaged baseline Variance per voxel')
 xlabel('Baseline Variance of voxel N in time series averaged across 2 scans (% signal change)')
 ylabel('Baseline Variance of voxel N in single scan time series (% signal change)')
 
-
-
 figure(10)
 x = linspace(0,.0025); y = x*sqrt(5)/sqrt(2);
 plot(x,y,'red'); hold on
@@ -671,13 +685,8 @@ xlabel('Baseline Variance of voxel N in time series averaged across 5 scans (% s
 ylabel('Baseline Variance of voxel N in time series averaged across 2 scans (% signal change)')
 
 
-end
-
-
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% stimulus overlap correlation and noise correlation %
+% stimulus overlap correlation and noise correlation %     % think i commented out the calculations of this from the getmodelresponse part
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 rfStimOverlapCor = corrcoef(graph.rfStimOverlapTSeries);
 rfStimOverlapCorArr = reshape(rfStimOverlapCor,[1 length(graph.linearCoords)^2]);
@@ -702,8 +711,6 @@ xlabel('Stimulus overlap correlation (voxel i,j)')
 ylabel('Baseline time series correlation (voxel i,j)')
 
 
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% rf and stimulus overlap correlation %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -719,14 +726,12 @@ ylabel('Stimulus Overlap Correlation (voxel i,j)')
 
 
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% old correlation graphs %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% I am drawing compressed gaussians in mgl then calculating the correlation between the images. could be better but idk how
+% I am drawing compressed gaussians in mgl then calculating the correlation between the images. i think overlap/kl divergence is better and muuuch faster
     
 % using correlate %    
-    
 %correlate receptive fields between areas
 for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
     disp(sprintf('(correlation) Voxel %i of %i',roi1vox,length(cleanRois(1).vox.linearCoords)));
@@ -753,8 +758,6 @@ roi = 2; for row = 1:length(cleanRois(roi).vox.linearCoords)
         v2SelfCor(row,column) = rfCorVal(1,2);
     end
 end
-
-
 
 % first, do v1 %
 figure(11);hold on;
@@ -822,8 +825,6 @@ plot(bins,noiseCorAvgs,'black','LineWidth',8);
 title('Receptive Field and Noise Correlations between v1 and v2'); xlabel('Receptive field correlation (voxel V1i, V2j)'); ylabel('Baseline time series correlation (voxel V1i, V2j)');
 
 
-
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% noise std in signal absent and present time frames %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -852,7 +853,32 @@ end
 
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% clean data for leave1out noise modeling %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%run average/concatenation and save data as avgRois, then run motioncomp or raw
+
+cleanRois(1).vox.tSeries = rois(1).vox.tSeries(:,voxels1)/100+1;
+cleanRois(1).vox.pRFtSeries = avgRois(1).vox.tSeries;
+cleanRois(1).vox.baselineNoise = cleanRois(1).vox.tSeries-cleanRois(1).vox.pRFtSeries;
+
+cleanRois(2).vox.tSeries = rois(2).vox.tSeries(:,voxels2)/100+1;
+cleanRois(2).vox.pRFtSeries = avgRois(2).vox.tSeries;
+cleanRois(2).vox.baselineNoise = cleanRois(2).vox.tSeries-cleanRois(2).vox.pRFtSeries;
+
+cleanRois(3).vox.tSeries = rois(3).vox.tSeries(:,voxels3)/100+1;
+cleanRois(3).vox.pRFtSeries = avgRois(3).vox.tSeries;
+cleanRois(3).vox.baselineNoise = cleanRois(3).vox.tSeries-cleanRois(3).vox.pRFtSeries;
+
+
+
 
 
 end
+
+
+
+
+
 
