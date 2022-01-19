@@ -7,7 +7,7 @@ function [rois cleanRois] = getpRFtSeries(overlayNum,scanNum)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 v = newView
-v = viewSet(v,'curGroup','MotionComp');
+v = viewSet(v,'curGroup','Concatenation');
 nScans = viewGet(v,'nScans');
 v = viewSet(v,'curScan',1); %remember to set the scan number and analysis you want. I will automate this later
 v = loadAnalysis(v,'pRFAnal/pRF');
@@ -20,7 +20,7 @@ v3 = loadROITSeries(v,'v3',1,1)
 
 rois = [v1 v2 v3]
 
-graphStuff = 0; correlate = 0;
+graphStuff = 1; correlate = 1;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Get the pRF-predicted time series of all voxels in the ROI %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -109,8 +109,9 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%
 %% correlate voxel RFs %%
 %%%%%%%%%%%%%%%%%%%%%%%%%
-if correlate
 % trying KL divergence of multivariate gaussians %
+
+sprintf('Correlation RFs and calculating distances (takes about a minute)...')
 
 %v1 rf self correlation
 roi = 1; for row = 1:length(cleanRois(roi).vox.linearCoords)
@@ -202,12 +203,15 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
     end
 end
 
-end
 
-%%%%%%%%%%%
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% graph %%
 %%%%%%%%%%%
 if graphStuff
+    
     
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% noise std in signal absent and present time frames %%
@@ -237,6 +241,8 @@ ylabel('Noise (% signal change)');
 %plot(linspace(0,4),linspace(0,4),'red');
 
 end
+
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -473,6 +479,8 @@ title('Distance and Noise Correlations between v1 and v3'); xlabel('Distance bet
 
 
 
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%
 %% distance vs rf cor %%
 %%%%%%%%%%%%%%%%%%%%%%%%
@@ -575,16 +583,85 @@ title('Distance and RF Correlations between v1 and v3'); xlabel('Distance betwee
 
 
 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% time series and noise correlation %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% V1
+figure(26);hold on;subplot(1,3,1);hold on;
+
+v1tSeriesCor = corrcoef(cleanRois(1).vox.pRFtSeries);
+
+for i = 1:length(v1NoiseCor); scatter(v1tSeriesCor(i,:),v1NoiseCor(i,:)); end;
+
+v1tSeriesCorArr = reshape(v1tSeriesCor,[1 length(v1tSeriesCor)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
+[v1tSeriesCorArr,sortOrder] = sort(v1tSeriesCorArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
+
+bins = [];noiseCorAvgs = []; step = .01;
+for bin = 0:step:40
+    if sum( (bin < v1tSeriesCorArr) & (v1tSeriesCorArr < bin+step) ) > 20
+        noiseCorAvg = median(v1NoiseCorArr((bin < v1tSeriesCorArr) & (v1tSeriesCorArr < bin+step)));
+        bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
+    end
+end
+
+plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([-.5,1]);ylim([-.5,1]);
+title('V1 Time Series and Noise Correlation'); xlabel('Time Series Correlation between voxels i,j'); ylabel('Noise correlation between voxels i,j');
+
+
+%% V2
+figure(26);hold on;subplot(1,3,2);hold on;
+
+v2tSeriesCor = corrcoef(cleanRois(2).vox.pRFtSeries);
+
+for i = 1:length(v2NoiseCor); scatter(v2tSeriesCor(i,:),v2NoiseCor(i,:)); end;
+
+v2tSeriesCorArr = reshape(v2tSeriesCor,[1 length(v2tSeriesCor)^2]); v2NoiseCorArr = reshape(v2NoiseCor,[1 length(v2NoiseCor)^2]);
+[v2tSeriesCorArr,sortOrder] = sort(v2tSeriesCorArr); v2NoiseCorArr = v2NoiseCorArr(sortOrder);
+
+bins = [];noiseCorAvgs = []; step = .01;
+for bin = 0:step:40
+    if sum( (bin < v2tSeriesCorArr) & (v2tSeriesCorArr < bin+step) ) > 20
+        noiseCorAvg = median(v2NoiseCorArr((bin < v2tSeriesCorArr) & (v2tSeriesCorArr < bin+step)));
+        bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
+    end
+end
+
+plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([-.5,1]);ylim([-.5,1]);
+title('V2 Time Series and Noise Correlation'); xlabel('Time Series Correlation between voxels i,j'); ylabel('Noise correlation between voxels i,j');
+
+
+%% V3
+figure(26);hold on;subplot(1,3,3);hold on;
+
+v3tSeriesCor = corrcoef(cleanRois(3).vox.pRFtSeries);
+
+for i = 1:length(v3NoiseCor); scatter(v3tSeriesCor(i,:),v3NoiseCor(i,:)); end;
+
+v3tSeriesCorArr = reshape(v3tSeriesCor,[1 length(v3tSeriesCor)^2]); v3NoiseCorArr = reshape(v3NoiseCor,[1 length(v3NoiseCor)^2]);
+[v3tSeriesCorArr,sortOrder] = sort(v3tSeriesCorArr); v3NoiseCorArr = v3NoiseCorArr(sortOrder);
+
+bins = [];noiseCorAvgs = []; step = .01;
+for bin = 0:step:40
+    if sum( (bin < v3tSeriesCorArr) & (v3tSeriesCorArr < bin+step) ) > 20
+        noiseCorAvg = median(v3NoiseCorArr((bin < v3tSeriesCorArr) & (v3tSeriesCorArr < bin+step)));
+        bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
+    end
+end
+
+plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([-.5,1]);ylim([-.5,1]);
+title('V3 Time Series and Noise Correlation'); xlabel('Time Series Correlation between voxels i,j'); ylabel('Noise correlation between voxels i,j');
+
+
+
+
+
+
+
+
 end  %%%%% end of graphing stuff
-
-
-
-
-
-
-
-
-
 
 
 
@@ -872,6 +949,42 @@ cleanRois(3).vox.pRFtSeries = avgRois(3).vox.tSeries;
 cleanRois(3).vox.baselineNoise = cleanRois(3).vox.tSeries-cleanRois(3).vox.pRFtSeries;
 
 
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% what is anticorrelation %%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%these voxels have anticorrelated noise
+
+badvox1 = 8;badvox2 = 9;
+
+figure(100);subplot(1,2,1)
+s1 = scatter(1:240,cleanRois(1).vox.tSeries(:,badvox1),'red');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,badvox1),'red')
+s2 = scatter(1:240,cleanRois(1).vox.tSeries(:,badvox2),'black');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,badvox2),'black')
+legend([s1 s2],{sprintf('Voxel %1.0f',badvox1),sprintf('Voxel %1.0f',badvox2)})
+title(sprintf('Voxels %1.0f,%1.0f time series (correlation = %.2f)',badvox1,badvox2,v1tSeriesCor(badvox1,badvox2))); ylabel('BOLD signal (%)'); xlabel('Timecourse')
+subplot(1,2,2)
+plot(1:240,cleanRois(1).vox.baselineNoise(:,badvox1),'red'); hold on
+plot(1:240,cleanRois(1).vox.baselineNoise(:,badvox2),'black');
+title(sprintf('Voxels %1.0f,%1.0f noise (noise correlation = %.2f)',badvox1,badvox2,v1NoiseCor(badvox1,badvox2))); xlabel('Timecourse'); ylabel('Model predicted-measured BOLD signal (% change)')
+
+
+%these voxels have correlated noise
+goodvox1 = 1;goodvox2 = 3;
+
+figure(101)
+subplot(1,2,1)
+s1 = scatter(1:240,cleanRois(1).vox.tSeries(:,goodvox1),'red');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,goodvox1),'red')
+s2 = scatter(1:240,cleanRois(1).vox.tSeries(:,goodvox2),'black');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,goodvox2),'black')
+legend([s1 s2],{sprintf('Voxel %1.0f',goodvox1),sprintf('Voxel %1.0f',goodvox2)})
+title(sprintf('Voxels %1.0f,%1.0f time series (correlation = %.2f)',goodvox1,goodvox2,v1tSeriesCor(goodvox1,goodvox2))); ylabel('BOLD signal (%)'); xlabel('Timecourse')
+subplot(1,2,2)
+plot(1:240,cleanRois(1).vox.baselineNoise(:,goodvox1),'red'); hold on
+plot(1:240,cleanRois(1).vox.baselineNoise(:,goodvox2),'black');
+title(sprintf('Voxels %1.0f,%1.0f noise (noise correlation = %.2f)',goodvox1,goodvox2,v1NoiseCor(goodvox1,goodvox2))); xlabel('Timecourse'); ylabel('Model predicted-measured BOLD signal (% change)')
 
 
 
