@@ -67,7 +67,7 @@ for voxel = 1:rois(roi).n
    rois(roi).vox.measurementVar(voxel) = var(m.tSeries-m.modelResponse);
    %rois(roi).vox.rfStimOverlapTSeries(:,voxel) = m.rfStimCor(:); 
   
-   if mod(voxel,50) == 0
+   if mod(voxel,100) == 0
        disp(sprintf('(getpRFTSeries) Roi %i of %i; Voxel %i of %i',roi,length(rois),voxel,rois(roi).n));
    end
    
@@ -213,32 +213,68 @@ end
 if graphStuff
     
     
+sprintf('Graphing things (also takes about a minute)...')    
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% noise std in signal absent and present time frames %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% bin the signal change %
-figure(9);
+% bin the signal change %figure(9);
 for roi = 1:length(cleanRois)
-    x = []; y = [];
-for bin = 0:.025:.95
-    z = [];
+    x = []; y = []; avg = [];
+for bin = 0:.1:.9
+    z = []; avgs = [];
 for voxel = 1:length(cleanRois(roi).vox.linearCoords)
+    if mean(cleanRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0
     z = [z std(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))]; 
+    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))];
+    end
 end
 x = [x bin];
 y = [y mean(z)];
+avg = [avg mean(avgs)];
 end
     
-subplot(1,length(cleanRois),roi); hold on;
+subplot(2,length(cleanRois),roi); hold on;
 scatter(x,y*100,'black');
-title(sprintf('%s Noise by Activity Quantile',cleanRois(roi).name))
+title(sprintf('%s Residual Std by Activity Quantile',cleanRois(roi).name))
 xlabel('Quantile of Voxel Activity');
 ylabel('Noise (% signal change)');
-%ylim([0,1]);
-%p = polyfit(x,y,1);
-%plot(linspace(0,4),polyval(p,linspace(0,4)),'black');
-%plot(linspace(0,4),linspace(0,4),'red');
+
+subplot(2,length(cleanRois),roi+3); hold on;
+scatter(x,avg*100,'black');plot([0,1],[0,0],'black--');
+title(sprintf('%s Average Residual by Activity Quantile',cleanRois(roi).name))
+xlabel('Quantile of Voxel Activity');
+ylabel('Average Residual (% signal change)');
+
+end
+
+figure(9);
+for roi = 1:length(cleanRois)
+    x = []; y = []; avg = [];
+for bin = 0:.1:.9
+    z = []; avgs = [];
+for voxel = 1:length(cleanRois(roi).vox.linearCoords)
+    if mean(cleanRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0
+    z = [z std(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))]; 
+    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))];
+    end
+end
+x = [x bin];
+y = [y mean(z)];
+avg = [avg mean(avgs)];
+end
+    
+subplot(2,length(cleanRois),roi); hold on;
+scatter(x,y*100,'black');
+title(sprintf('%s Residual Std by Activity Quantile',cleanRois(roi).name))
+xlabel('Quantile of Voxel Activity');
+ylabel('Noise (% signal change)');
+
+subplot(2,length(cleanRois),roi+3); hold on;
+scatter(x,avg*100,'black');plot([0,1],[0,0],'black--');
+title(sprintf('%s Average Residual by Activity Quantile',cleanRois(roi).name))
+xlabel('Quantile of Voxel Activity');
+ylabel('Average Residual (% signal change)');
 
 end
 
@@ -936,6 +972,12 @@ end
 
 %run average/concatenation and save data as avgRois, then run motioncomp or raw
 
+roi = 1; voxels1 = (eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth);
+roi = 2; voxels2 = (eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth);
+roi = 3; voxels3 = (eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth);
+for roi = 1:3; avgRois(roi) = cleanRois(roi);end;
+
+
 cleanRois(1).vox.tSeries = rois(1).vox.tSeries(:,voxels1)/100+1;
 cleanRois(1).vox.pRFtSeries = avgRois(1).vox.tSeries;
 cleanRois(1).vox.baselineNoise = cleanRois(1).vox.tSeries-cleanRois(1).vox.pRFtSeries;
@@ -959,35 +1001,72 @@ cleanRois(3).vox.baselineNoise = cleanRois(3).vox.tSeries-cleanRois(3).vox.pRFtS
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %these voxels have anticorrelated noise
 
-badvox1 = 8;badvox2 = 9;
+s 
+sum((v1NoiseCor(:,:) < -.2) & (v1tSeriesCor(:,:) > .9))
+find((v1NoiseCor(vox,:) < -.2) & (v1tSeriesCor(vox,:) > .9))
 
-figure(100);subplot(1,2,1)
+
+
+
+
+badvox1 = 24;badvox2 = 8;
+
+%plot time series%
+figure(100);close;figure(100);subplot(2,2,1)
 s1 = scatter(1:240,cleanRois(1).vox.tSeries(:,badvox1),'red');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,badvox1),'red')
 s2 = scatter(1:240,cleanRois(1).vox.tSeries(:,badvox2),'black');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,badvox2),'black')
 legend([s1 s2],{sprintf('Voxel %1.0f',badvox1),sprintf('Voxel %1.0f',badvox2)})
-title(sprintf('Voxels %1.0f,%1.0f time series (correlation = %.2f)',badvox1,badvox2,v1tSeriesCor(badvox1,badvox2))); ylabel('BOLD signal (%)'); xlabel('Timecourse')
-subplot(1,2,2)
+title(sprintf('Voxels %1.0f,%1.0f time series (correlation = %.2f)',badvox1,badvox2,v1tSeriesCor(badvox1,badvox2))); ylabel('BOLD signal (change from average)'); xlabel('Timecourse')
+subplot(2,2,2)
 plot(1:240,cleanRois(1).vox.baselineNoise(:,badvox1),'red'); hold on
 plot(1:240,cleanRois(1).vox.baselineNoise(:,badvox2),'black');
-title(sprintf('Voxels %1.0f,%1.0f noise (noise correlation = %.2f)',badvox1,badvox2,v1NoiseCor(badvox1,badvox2))); xlabel('Timecourse'); ylabel('Model predicted-measured BOLD signal (% change)')
+title(sprintf('Voxels %1.0f,%1.0f noise (noise correlation = %.2f)',badvox1,badvox2,v1NoiseCor(badvox1,badvox2))); xlabel('Timecourse'); ylabel('Residual BOLD signal (change from average)')
+
+%show correlations%
+subplot(2,2,3)
+s3 = scatter(cleanRois(1).vox.tSeries(:,badvox1),cleanRois(1).vox.tSeries(:,badvox2),'black');
+xlabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',badvox1));ylabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',badvox2));
+title('Correlation')
+
+subplot(2,2,4)
+s3 = scatter(cleanRois(1).vox.baselineNoise(:,badvox1),cleanRois(1).vox.baselineNoise(:,badvox2),'black');
+xlabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',badvox1));ylabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',badvox2));
+title('Correlation')
 
 
-%these voxels have correlated noise
-goodvox1 = 1;goodvox2 = 3;
 
-figure(101)
-subplot(1,2,1)
+
+%plot time series of good voxels%
+goodvox1 = 50;goodvox2 = 56;
+
+figure(101);close;figure(101)
+subplot(2,2,1)
 s1 = scatter(1:240,cleanRois(1).vox.tSeries(:,goodvox1),'red');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,goodvox1),'red')
 s2 = scatter(1:240,cleanRois(1).vox.tSeries(:,goodvox2),'black');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,goodvox2),'black')
 legend([s1 s2],{sprintf('Voxel %1.0f',goodvox1),sprintf('Voxel %1.0f',goodvox2)})
-title(sprintf('Voxels %1.0f,%1.0f time series (correlation = %.2f)',goodvox1,goodvox2,v1tSeriesCor(goodvox1,goodvox2))); ylabel('BOLD signal (%)'); xlabel('Timecourse')
-subplot(1,2,2)
+title(sprintf('Voxels %1.0f,%1.0f time series (correlation = %.2f)',goodvox1,goodvox2,v1tSeriesCor(goodvox1,goodvox2))); ylabel('BOLD signal (change from average)'); xlabel('Timecourse')
+subplot(2,2,2)
 plot(1:240,cleanRois(1).vox.baselineNoise(:,goodvox1),'red'); hold on
 plot(1:240,cleanRois(1).vox.baselineNoise(:,goodvox2),'black');
-title(sprintf('Voxels %1.0f,%1.0f noise (noise correlation = %.2f)',goodvox1,goodvox2,v1NoiseCor(goodvox1,goodvox2))); xlabel('Timecourse'); ylabel('Model predicted-measured BOLD signal (% change)')
+title(sprintf('Voxels %1.0f,%1.0f noise (noise correlation = %.2f)',goodvox1,goodvox2,v1NoiseCor(goodvox1,goodvox2))); xlabel('Timecourse'); ylabel('Residual BOLD signal (change from average)')
+
+
+subplot(2,2,3)
+s3 = scatter(cleanRois(1).vox.tSeries(:,goodvox1),cleanRois(1).vox.tSeries(:,goodvox2),'black');
+xlabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',goodvox1));ylabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',goodvox2));
+title('Correlation')
+
+subplot(2,2,4)
+s3 = scatter(cleanRois(1).vox.baselineNoise(:,goodvox1),cleanRois(1).vox.baselineNoise(:,goodvox2),'black');
+xlabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',goodvox1));ylabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',goodvox2));
+title('Correlation')
 
 
 
+
+
+
+%end dontDo
 end
 
 
