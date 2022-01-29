@@ -216,37 +216,6 @@ if graphStuff
 sprintf('Graphing things (also takes about a minute)...')    
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% noise std in signal absent and present time frames %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% bin the signal change %figure(9);
-for roi = 1:length(cleanRois)
-    x = []; y = []; avg = [];
-for bin = 0:.1:.9
-    z = []; avgs = [];
-for voxel = 1:length(cleanRois(roi).vox.linearCoords)
-    if mean(cleanRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0
-    z = [z std(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))]; 
-    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))];
-    end
-end
-x = [x bin];
-y = [y mean(z)];
-avg = [avg mean(avgs)];
-end
-    
-subplot(2,length(cleanRois),roi); hold on;
-scatter(x,y*100,'black');
-title(sprintf('%s Residual Std by Activity Quantile',cleanRois(roi).name))
-xlabel('Quantile of Voxel Activity');
-ylabel('Noise (% signal change)');
-
-subplot(2,length(cleanRois),roi+3); hold on;
-scatter(x,avg*100,'black');plot([0,1],[0,0],'black--');
-title(sprintf('%s Average Residual by Activity Quantile',cleanRois(roi).name))
-xlabel('Quantile of Voxel Activity');
-ylabel('Average Residual (% signal change)');
-
-end
 
 figure(9);
 for roi = 1:length(cleanRois)
@@ -277,8 +246,6 @@ xlabel('Quantile of Voxel Activity');
 ylabel('Average Residual (% signal change)');
 
 end
-
-
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
