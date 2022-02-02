@@ -262,9 +262,9 @@ for i = 1:length(v1NoiseCor); scatter(v1kldCor(i,:),v1NoiseCor(i,:)); end;
 v1kldCorArr = reshape(v1kldCor,[1 length(v1kldCor)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
 [v1kldCorArr,sortOrder] = sort(v1kldCorArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
 
-bins = [];noiseCorAvgs = []; step = .1
+bins = [];noiseCorAvgs = []; step = .25
 for bin = 0:step:40
-    if sum( (bin < v1kldCorArr) & (v1kldCorArr < bin+step) ) > 20
+    if sum( (bin < v1kldCorArr) & (v1kldCorArr < bin+step) ) > 15
         noiseCorAvg = median(v1NoiseCorArr((bin < v1kldCorArr) & (v1kldCorArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -285,7 +285,7 @@ v2kldCorArr = reshape(v2kldCor,[1 length(v2kldCor)^2]); v2NoiseCorArr = reshape(
 
 bins = [];noiseCorAvgs = [];
 for bin = 0:step:40
-    if sum( (bin < v2kldCorArr) & (v2kldCorArr < bin+step) ) > 20
+    if sum( (bin < v2kldCorArr) & (v2kldCorArr < bin+step) ) > 15
         noiseCorAvg = median(v2NoiseCorArr((bin < v2kldCorArr) & (v2kldCorArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -307,14 +307,14 @@ v3kldCorArr = reshape(v3kldCor,[1 length(v3kldCor)^2]); v3NoiseCorArr = reshape(
 
 bins = [];noiseCorAvgs = [];
 for bin = 0:step:40
-    if sum( (bin < v3kldCorArr) & (v3kldCorArr < bin+step) ) > 20
+    if sum( (bin < v3kldCorArr) & (v3kldCorArr < bin+step) ) > 15
         noiseCorAvg = median(v3NoiseCorArr((bin < v3kldCorArr) & (v3kldCorArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([0,20]);set(gca,'XDir','reverse');
-title('V2 Receptive Field and Noise Correlations'); xlabel('KL Divergence between voxels i,j RFs (distance)'); ylabel('Noise correlation between voxels i,j (mm)');
+title('V3 Receptive Field and Noise Correlations'); xlabel('KL Divergence between voxels i,j RFs (distance)'); ylabel('Noise correlation between voxels i,j (mm)');
 
 
 %between v1 and v2
@@ -330,7 +330,7 @@ v1v2NoiseCorArr = reshape(v1v2NoiseCor,[1 min(size(v1v2NoiseCor))*max(size(v1v2N
 
 bins = [];noiseCorAvgs = [];
 for bin = 0:step:45
-    if sum( (bin < v1v2kldCorArr) & (v1v2kldCorArr < bin+step) ) > 20
+    if sum( (bin < v1v2kldCorArr) & (v1v2kldCorArr < bin+step) ) > 15
         noiseCorAvg = median(v1v2NoiseCorArr((bin < v1v2kldCorArr) & (v1v2kldCorArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -353,7 +353,7 @@ v1v3NoiseCorArr = reshape(v1v3NoiseCor,[1 min(size(v1v3NoiseCor))*max(size(v1v3N
 
 bins = [];noiseCorAvgs = [];
 for bin = 0:step:45
-    if sum( (bin < v1v3kldCorArr) & (v1v3kldCorArr < bin+step) ) > 20
+    if sum( (bin < v1v3kldCorArr) & (v1v3kldCorArr < bin+step) ) > 15
         noiseCorAvg = median(v1v3NoiseCorArr((bin < v1v3kldCorArr) & (v1v3kldCorArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -381,7 +381,7 @@ v1distArr = reshape(v1dist,[1 length(v1dist)^2]); v1NoiseCorArr = reshape(v1Nois
 
 bins = [];noiseCorAvgs = []; step = .25
 for bin = 0:step:40
-    if sum( (bin < v1distArr) & (v1distArr < bin+step) ) > 20
+    if sum( (bin < v1distArr) & (v1distArr < bin+step) ) > 15
         noiseCorAvg = median(v1NoiseCorArr((bin < v1distArr) & (v1distArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -402,7 +402,7 @@ v2distArr = reshape(v2dist,[1 length(v2dist)^2]); v2NoiseCorArr = reshape(v2Nois
 
 bins = [];noiseCorAvgs = [];
 for bin = 0:step:40
-    if sum( (bin < v2distArr) & (v2distArr < bin+step) ) > 20
+    if sum( (bin < v2distArr) & (v2distArr < bin+step) ) > 15
         noiseCorAvg = median(v2NoiseCorArr((bin < v2distArr) & (v2distArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -424,7 +424,7 @@ v3distArr = reshape(v3dist,[1 length(v3dist)^2]); v3NoiseCorArr = reshape(v3Nois
 
 bins = [];noiseCorAvgs = [];
 for bin = 0:step:40
-    if sum( (bin < v3distArr) & (v3distArr < bin+step) ) > 20
+    if sum( (bin < v3distArr) & (v3distArr < bin+step) ) > 15
         noiseCorAvg = median(v3NoiseCorArr((bin < v3distArr) & (v3distArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -447,7 +447,7 @@ v1v2NoiseCorArr = reshape(v1v2NoiseCor,[1 min(size(v1v2NoiseCor))*max(size(v1v2N
 
 bins = [];noiseCorAvgs = [];
 for bin = 0:step:45
-    if sum( (bin < v1v2distArr) & (v1v2distArr < bin+step) ) > 20
+    if sum( (bin < v1v2distArr) & (v1v2distArr < bin+step) ) > 15
         noiseCorAvg = median(v1v2NoiseCorArr((bin < v1v2distArr) & (v1v2distArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -470,7 +470,7 @@ v1v3NoiseCorArr = reshape(v1v3NoiseCor,[1 min(size(v1v3NoiseCor))*max(size(v1v3N
 
 bins = [];noiseCorAvgs = [];
 for bin = 0:step:45
-    if sum( (bin < v1v3distArr) & (v1v3distArr < bin+step) ) > 20
+    if sum( (bin < v1v3distArr) & (v1v3distArr < bin+step) ) > 15
         noiseCorAvg = median(v1v3NoiseCorArr((bin < v1v3distArr) & (v1v3distArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -497,7 +497,7 @@ v1distArr = reshape(v1dist,[1 length(v1dist)^2]); v1kldCorArr = reshape(v1kldCor
 [v1distArr,sortOrder] = sort(v1distArr); v1kldCorArr = v1kldCorArr(sortOrder);
 bins = [];kldCorAvgs = []; step = .25
 for bin = 0:step:40
-    if sum( (bin < v1distArr) & (v1distArr < bin+step) ) > 20
+    if sum( (bin < v1distArr) & (v1distArr < bin+step) ) > 15
         kldCorAvg = median(v1kldCorArr((bin < v1distArr) & (v1distArr < bin+step)));
         bins = [bins bin]; kldCorAvgs = [kldCorAvgs kldCorAvg];
     end
@@ -515,7 +515,7 @@ v2distArr = reshape(v2dist,[1 length(v2dist)^2]); v2kldCorArr = reshape(v2kldCor
 [v2distArr,sortOrder] = sort(v2distArr); v2kldCorArr = v2kldCorArr(sortOrder);
 bins = [];kldCorAvgs = []; step = .25
 for bin = 0:step:40
-    if sum( (bin < v2distArr) & (v2distArr < bin+step) ) > 20
+    if sum( (bin < v2distArr) & (v2distArr < bin+step) ) > 15
         kldCorAvg = median(v2kldCorArr((bin < v2distArr) & (v2distArr < bin+step)));
         bins = [bins bin]; kldCorAvgs = [kldCorAvgs kldCorAvg];
     end
@@ -533,7 +533,7 @@ v3distArr = reshape(v3dist,[1 length(v3dist)^2]); v3kldCorArr = reshape(v3kldCor
 [v3distArr,sortOrder] = sort(v3distArr); v3kldCorArr = v3kldCorArr(sortOrder);
 bins = [];kldCorAvgs = []; step = .25
 for bin = 0:step:40
-    if sum( (bin < v3distArr) & (v3distArr < bin+step) ) > 20
+    if sum( (bin < v3distArr) & (v3distArr < bin+step) ) > 15
         kldCorAvg = median(v3kldCorArr((bin < v3distArr) & (v3distArr < bin+step)));
         bins = [bins bin]; kldCorAvgs = [kldCorAvgs kldCorAvg];
     end
@@ -553,7 +553,7 @@ v1v2kldCorArr = reshape(v1v2kldCor,[1 min(size(v1v2kldCor))*max(size(v1v2kldCor)
 
 bins = [];kldCorAvgs = [];
 for bin = 0:step:45
-    if sum( (bin < v1v2distArr) & (v1v2distArr < bin+step) ) > 20
+    if sum( (bin < v1v2distArr) & (v1v2distArr < bin+step) ) > 15
         kldCorAvg = median(v1v2kldCorArr((bin < v1v2distArr) & (v1v2distArr < bin+step)));
         bins = [bins bin]; kldCorAvgs = [kldCorAvgs kldCorAvg];
     end
@@ -574,7 +574,7 @@ v1v3kldCorArr = reshape(v1v3kldCor,[1 min(size(v1v3kldCor))*max(size(v1v3kldCor)
 
 bins = [];kldCorAvgs = [];
 for bin = 0:step:45
-    if sum( (bin < v1v3distArr) & (v1v3distArr < bin+step) ) > 20
+    if sum( (bin < v1v3distArr) & (v1v3distArr < bin+step) ) > 15
         kldCorAvg = median(v1v3kldCorArr((bin < v1v3distArr) & (v1v3distArr < bin+step)));
         bins = [bins bin]; kldCorAvgs = [kldCorAvgs kldCorAvg];
     end
@@ -603,8 +603,8 @@ v1tSeriesCorArr = reshape(v1tSeriesCor,[1 length(v1tSeriesCor)^2]); v1NoiseCorAr
 [v1tSeriesCorArr,sortOrder] = sort(v1tSeriesCorArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
 
 bins = [];noiseCorAvgs = []; step = .01;
-for bin = 0:step:40
-    if sum( (bin < v1tSeriesCorArr) & (v1tSeriesCorArr < bin+step) ) > 20
+for bin = -.5:step:1
+    if sum( (bin < v1tSeriesCorArr) & (v1tSeriesCorArr < bin+step) ) > 15
         noiseCorAvg = median(v1NoiseCorArr((bin < v1tSeriesCorArr) & (v1tSeriesCorArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -625,8 +625,8 @@ v2tSeriesCorArr = reshape(v2tSeriesCor,[1 length(v2tSeriesCor)^2]); v2NoiseCorAr
 [v2tSeriesCorArr,sortOrder] = sort(v2tSeriesCorArr); v2NoiseCorArr = v2NoiseCorArr(sortOrder);
 
 bins = [];noiseCorAvgs = []; step = .01;
-for bin = 0:step:40
-    if sum( (bin < v2tSeriesCorArr) & (v2tSeriesCorArr < bin+step) ) > 20
+for bin = -.5:step:1
+    if sum( (bin < v2tSeriesCorArr) & (v2tSeriesCorArr < bin+step) ) > 15
         noiseCorAvg = median(v2NoiseCorArr((bin < v2tSeriesCorArr) & (v2tSeriesCorArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
@@ -647,8 +647,8 @@ v3tSeriesCorArr = reshape(v3tSeriesCor,[1 length(v3tSeriesCor)^2]); v3NoiseCorAr
 [v3tSeriesCorArr,sortOrder] = sort(v3tSeriesCorArr); v3NoiseCorArr = v3NoiseCorArr(sortOrder);
 
 bins = [];noiseCorAvgs = []; step = .01;
-for bin = 0:step:40
-    if sum( (bin < v3tSeriesCorArr) & (v3tSeriesCorArr < bin+step) ) > 20
+for bin = -.5:step:1
+    if sum( (bin < v3tSeriesCorArr) & (v3tSeriesCorArr < bin+step) ) > 15
         noiseCorAvg = median(v3NoiseCorArr((bin < v3tSeriesCorArr) & (v3tSeriesCorArr < bin+step)));
         bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
