@@ -219,23 +219,65 @@ sprintf('Graphing things (also takes about a minute)...')
 
 figure(9);
 for roi = 1:length(cleanRois)
-    x = []; y = []; avg = [];
-for bin = 0:.1:.9
+    x = []; y = []; avg = []; errhigh = []; errlow = [];
+seg = .1; for bin = 0:seg:(1-seg)
     z = []; avgs = [];
 for voxel = 1:length(cleanRois(roi).vox.linearCoords)
     if mean(cleanRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0
-    z = [z std(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))]; 
-    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))];
+    lowbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+bin*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));    
+    highbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+(bin+seg)*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));
+    z = [z std(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
+    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
     end
 end
 x = [x bin];
 y = [y mean(z)];
+errhigh = [errhigh quantile(sort(z),.95)];
+errlow = [errlow quantile(sort(z),.05)];
 avg = [avg mean(avgs)];
 end
-    
+
+subplot(2,length(cleanRois),roi); hold on;
+scatter(x,y*100,'bla
+figure(9);
+for roi = 1:length(cleanRois)
+    x = []; y = []; avg = []; errhigh = []; errlow = [];
+seg = .1; for bin = 0:seg:(1-seg)
+    z = []; avgs = [];
+for voxel = 1:length(cleanRois(roi).vox.linearCoords)
+    if mean(cleanRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0
+    lowbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+bin*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));    
+    highbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+(bin+seg)*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));
+    z = [z std(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
+    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
+    end
+end
+x = [x bin];
+y = [y mean(z)];
+errhigh = [errhigh quantile(sort(z),.95)];
+errlow = [errlow quantile(sort(z),.05)];
+avg = [avg mean(avgs)];
+end
+
 subplot(2,length(cleanRois),roi); hold on;
 scatter(x,y*100,'black');
+%errorbar(x,y*100,errlow*100,errhigh*100);
 title(sprintf('%s Residual Std by Activity Quantile',cleanRois(roi).name))
+
+xlabel('Quantile of Voxel Activity');
+ylabel('Noise (% signal change)');
+
+subplot(2,length(cleanRois),roi+3); hold on;
+scatter(x,avg*100,'black');plot([0,1],[0,0],'black--');
+title(sprintf('%s Average Residual by Activity Quantile',cleanRois(roi).name))
+xlabel('Quantile of Voxel Activity');
+ylabel('Average Residual (% signal change)');
+
+end
+ck');
+%errorbar(x,y*100,errlow*100,errhigh*100);
+title(sprintf('%s Residual Std by Activity Quantile',cleanRois(roi).name))
+
 xlabel('Quantile of Voxel Activity');
 ylabel('Noise (% signal change)');
 
@@ -262,7 +304,7 @@ for i = 1:length(v1NoiseCor); scatter(v1kldCor(i,:),v1NoiseCor(i,:)); end;
 v1kldCorArr = reshape(v1kldCor,[1 length(v1kldCor)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
 [v1kldCorArr,sortOrder] = sort(v1kldCorArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
 
-bins = [];noiseCorAvgs = []; step = .25
+bins = [];noiseCorAvgs = []; step = .5
 for bin = 0:step:40
     if sum( (bin < v1kldCorArr) & (v1kldCorArr < bin+step) ) > 15
         noiseCorAvg = median(v1NoiseCorArr((bin < v1kldCorArr) & (v1kldCorArr < bin+step)));
@@ -379,7 +421,7 @@ for i = 1:length(v1NoiseCor); scatter(v1dist(i,:),v1NoiseCor(i,:)); end;
 v1distArr = reshape(v1dist,[1 length(v1dist)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
 [v1distArr,sortOrder] = sort(v1distArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
 
-bins = [];noiseCorAvgs = []; step = .25
+bins = [];noiseCorAvgs = []; step = .5
 for bin = 0:step:40
     if sum( (bin < v1distArr) & (v1distArr < bin+step) ) > 15
         noiseCorAvg = median(v1NoiseCorArr((bin < v1distArr) & (v1distArr < bin+step)));
@@ -495,7 +537,7 @@ for i = 1:length(v1kldCor); scatter(v1dist(i,:),v1kldCor(i,:)); end;
 
 v1distArr = reshape(v1dist,[1 length(v1dist)^2]); v1kldCorArr = reshape(v1kldCor,[1 length(v1kldCor)^2]);
 [v1distArr,sortOrder] = sort(v1distArr); v1kldCorArr = v1kldCorArr(sortOrder);
-bins = [];kldCorAvgs = []; step = .25
+bins = [];kldCorAvgs = []; step = .5
 for bin = 0:step:40
     if sum( (bin < v1distArr) & (v1distArr < bin+step) ) > 15
         kldCorAvg = median(v1kldCorArr((bin < v1distArr) & (v1distArr < bin+step)));
@@ -513,7 +555,7 @@ for i = 1:length(v2kldCor); scatter(v2dist(i,:),v2kldCor(i,:)); end;
 
 v2distArr = reshape(v2dist,[1 length(v2dist)^2]); v2kldCorArr = reshape(v2kldCor,[1 length(v2kldCor)^2]);
 [v2distArr,sortOrder] = sort(v2distArr); v2kldCorArr = v2kldCorArr(sortOrder);
-bins = [];kldCorAvgs = []; step = .25
+bins = [];kldCorAvgs = [];
 for bin = 0:step:40
     if sum( (bin < v2distArr) & (v2distArr < bin+step) ) > 15
         kldCorAvg = median(v2kldCorArr((bin < v2distArr) & (v2distArr < bin+step)));
@@ -531,7 +573,7 @@ for i = 1:length(v3kldCor); scatter(v3dist(i,:),v3kldCor(i,:)); end;
 
 v3distArr = reshape(v3dist,[1 length(v3dist)^2]); v3kldCorArr = reshape(v3kldCor,[1 length(v3kldCor)^2]);
 [v3distArr,sortOrder] = sort(v3distArr); v3kldCorArr = v3kldCorArr(sortOrder);
-bins = [];kldCorAvgs = []; step = .25
+bins = [];kldCorAvgs = []; 
 for bin = 0:step:40
     if sum( (bin < v3distArr) & (v3distArr < bin+step) ) > 15
         kldCorAvg = median(v3kldCorArr((bin < v3distArr) & (v3distArr < bin+step)));
@@ -602,7 +644,7 @@ for i = 1:length(v1NoiseCor); scatter(v1tSeriesCor(i,:),v1NoiseCor(i,:)); end;
 v1tSeriesCorArr = reshape(v1tSeriesCor,[1 length(v1tSeriesCor)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
 [v1tSeriesCorArr,sortOrder] = sort(v1tSeriesCorArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
 
-bins = [];noiseCorAvgs = []; step = .01;
+bins = [];noiseCorAvgs = []; step = .05;
 for bin = -.5:step:1
     if sum( (bin < v1tSeriesCorArr) & (v1tSeriesCorArr < bin+step) ) > 15
         noiseCorAvg = median(v1NoiseCorArr((bin < v1tSeriesCorArr) & (v1tSeriesCorArr < bin+step)));
@@ -624,7 +666,7 @@ for i = 1:length(v2NoiseCor); scatter(v2tSeriesCor(i,:),v2NoiseCor(i,:)); end;
 v2tSeriesCorArr = reshape(v2tSeriesCor,[1 length(v2tSeriesCor)^2]); v2NoiseCorArr = reshape(v2NoiseCor,[1 length(v2NoiseCor)^2]);
 [v2tSeriesCorArr,sortOrder] = sort(v2tSeriesCorArr); v2NoiseCorArr = v2NoiseCorArr(sortOrder);
 
-bins = [];noiseCorAvgs = []; step = .01;
+bins = [];noiseCorAvgs = []; 
 for bin = -.5:step:1
     if sum( (bin < v2tSeriesCorArr) & (v2tSeriesCorArr < bin+step) ) > 15
         noiseCorAvg = median(v2NoiseCorArr((bin < v2tSeriesCorArr) & (v2tSeriesCorArr < bin+step)));
@@ -646,7 +688,7 @@ for i = 1:length(v3NoiseCor); scatter(v3tSeriesCor(i,:),v3NoiseCor(i,:)); end;
 v3tSeriesCorArr = reshape(v3tSeriesCor,[1 length(v3tSeriesCor)^2]); v3NoiseCorArr = reshape(v3NoiseCor,[1 length(v3NoiseCor)^2]);
 [v3tSeriesCorArr,sortOrder] = sort(v3tSeriesCorArr); v3NoiseCorArr = v3NoiseCorArr(sortOrder);
 
-bins = [];noiseCorAvgs = []; step = .01;
+bins = [];noiseCorAvgs = [];
 for bin = -.5:step:1
     if sum( (bin < v3tSeriesCorArr) & (v3tSeriesCorArr < bin+step) ) > 15
         noiseCorAvg = median(v3NoiseCorArr((bin < v3tSeriesCorArr) & (v3tSeriesCorArr < bin+step)));
@@ -1028,6 +1070,44 @@ s3 = scatter(cleanRois(1).vox.baselineNoise(:,goodvox1),cleanRois(1).vox.baselin
 xlabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',goodvox1));ylabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',goodvox2));
 title('Correlation')
 
+
+
+
+
+%%%%%%%%%% figure 9 with equal bins
+figure(9);
+for roi = 1:length(cleanRois)
+    x = []; y = []; avg = []; errhigh = []; errlow = [];
+for bin = 0:.1:.9
+    z = []; avgs = [];
+for voxel = 1:length(cleanRois(roi).vox.linearCoords)
+    if mean(cleanRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0
+    z = [z std(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))]; 
+    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))];
+    end
+end
+x = [x bin];
+y = [y mean(z)];
+errhigh = [errhigh quantile(sort(z),.95)];
+errlow = [errlow quantile(sort(z),.05)];
+avg = [avg mean(avgs)];
+end
+
+subplot(2,length(cleanRois),roi); hold on;
+scatter(x,y*100,'black');
+%errorbar(x,y*100,errlow*100,errhigh*100);
+title(sprintf('%s Residual Std by Activity Quantile',cleanRois(roi).name))
+
+xlabel('Quantile of Voxel Activity');
+ylabel('Noise (% signal change)');
+
+subplot(2,length(cleanRois),roi+3); hold on;
+scatter(x,avg*100,'black');plot([0,1],[0,0],'black--');
+title(sprintf('%s Average Residual by Activity Quantile',cleanRois(roi).name))
+xlabel('Quantile of Voxel Activity');
+ylabel('Average Residual (% signal change)');
+
+end
 
 
 
