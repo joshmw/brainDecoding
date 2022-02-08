@@ -14,9 +14,9 @@ v = loadAnalysis(v,'pRFAnal/pRF');
 tSeries = loadTSeries(v);
 
 % manually define the ROIS you want to look at %
-v1 = loadROITSeries(v,'v1',1,1)
-v2 = loadROITSeries(v,'v2',1,1)
-v3 = loadROITSeries(v,'v3',1,1)
+v1 = loadROITSeries(v,'v1')
+v2 = loadROITSeries(v,'v2')
+v3 = loadROITSeries(v,'v3')
 
 rois = [v1 v2 v3]
 
@@ -219,7 +219,7 @@ sprintf('Graphing things (also takes about a minute)...')
 
 figure(9);
 for roi = 1:length(cleanRois)
-    x = []; y = []; avg = []; errhigh = []; errlow = [];
+    x = []; y = []; avg = []; errhigh = []; errlow = []; errmeanhigh = []; errmeanlow = []; yAll = []; avgAll = [];
 seg = .1; for bin = 0:seg:(1-seg)
     z = []; avgs = [];
 for voxel = 1:length(cleanRois(roi).vox.linearCoords)
@@ -230,59 +230,39 @@ for voxel = 1:length(cleanRois(roi).vox.linearCoords)
     avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
     end
 end
+
 x = [x bin];
 y = [y mean(z)];
-errhigh = [errhigh quantile(sort(z),.95)];
-errlow = [errlow quantile(sort(z),.05)];
+yAll{length(x)} = z;
 avg = [avg mean(avgs)];
+avgAll{length(x)} = avgs;
+
+% errorbars %
+for i = 1:1000; err(i) = mean(datasample(z,length(cleanRois(roi).vox.linearCoords)));end; err = sort(err);
+errhigh = [errhigh quantile(err,.95)-mean(z)];
+errlow = [errlow mean(z)-quantile(err,.05)];
+
+for i = 1:1000; err(i) = mean(datasample(avgs,length(cleanRois(roi).vox.linearCoords)));end; err = sort(err);
+errmeanhigh = [errmeanhigh quantile(err,.95)-mean(avgs)];
+errmeanlow = [errmeanlow mean(avgs)-quantile(err,.05)];
 end
 
+% plot %
 subplot(2,length(cleanRois),roi); hold on;
-scatter(x,y*100,'bla
-figure(9);
-for roi = 1:length(cleanRois)
-    x = []; y = []; avg = []; errhigh = []; errlow = [];
-seg = .1; for bin = 0:seg:(1-seg)
-    z = []; avgs = [];
-for voxel = 1:length(cleanRois(roi).vox.linearCoords)
-    if mean(cleanRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0
-    lowbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+bin*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));    
-    highbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+(bin+seg)*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));
-    z = [z std(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
-    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
-    end
-end
-x = [x bin];
-y = [y mean(z)];
-errhigh = [errhigh quantile(sort(z),.95)];
-errlow = [errlow quantile(sort(z),.05)];
-avg = [avg mean(avgs)];
-end
+%for i = 1:length(x); scatter(repmat(x(i),1,length(cleanRois(roi).vox.linearCoords)),yAll{i}*100); hold on; end;
+scatter(x,y*100,60,'black','filled'); 
+eb = errorbar(x,y*100,errlow*100,errhigh*100,'o'); eb.Color = 'black';
 
-subplot(2,length(cleanRois),roi); hold on;
-scatter(x,y*100,'black');
-%errorbar(x,y*100,errlow*100,errhigh*100);
 title(sprintf('%s Residual Std by Activity Quantile',cleanRois(roi).name))
-
 xlabel('Quantile of Voxel Activity');
 ylabel('Noise (% signal change)');
 
 subplot(2,length(cleanRois),roi+3); hold on;
-scatter(x,avg*100,'black');plot([0,1],[0,0],'black--');
-title(sprintf('%s Average Residual by Activity Quantile',cleanRois(roi).name))
-xlabel('Quantile of Voxel Activity');
-ylabel('Average Residual (% signal change)');
+%for i = 1:length(x); scatter(repmat(x(i),1,length(cleanRois(roi).vox.linearCoords)),avgAll{i}*100); hold on; end;
+scatter(x,avg*100,60,'black','filled');plot([0,1],[0,0],'black--');
+eb = errorbar(x,avg*100,errmeanlow*100,errmeanhigh*100,'o'); eb.Color = 'black';
 
-end
-ck');
-%errorbar(x,y*100,errlow*100,errhigh*100);
-title(sprintf('%s Residual Std by Activity Quantile',cleanRois(roi).name))
 
-xlabel('Quantile of Voxel Activity');
-ylabel('Noise (% signal change)');
-
-subplot(2,length(cleanRois),roi+3); hold on;
-scatter(x,avg*100,'black');plot([0,1],[0,0],'black--');
 title(sprintf('%s Average Residual by Activity Quantile',cleanRois(roi).name))
 xlabel('Quantile of Voxel Activity');
 ylabel('Average Residual (% signal change)');
