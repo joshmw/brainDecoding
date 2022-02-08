@@ -1,31 +1,57 @@
 function graphCor(filename)
 
 load(filename)
+   
+sprintf('Graphing things (also takes about a minute)...')    
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% noise std in signal absent and present time frames %%
 
 figure(9);
 for roi = 1:length(cleanRois)
-    x = []; y = []; avg = [];
-for bin = 0:.1:.9
+    x = []; y = []; avg = []; errhigh = []; errlow = []; errmeanhigh = []; errmeanlow = []; yAll = []; avgAll = [];
+seg = .1; for bin = 0:seg:(1-seg)
     z = []; avgs = [];
 for voxel = 1:length(cleanRois(roi).vox.linearCoords)
     if mean(cleanRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0
-    z = [z std(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))]; 
-    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin+.025)>cleanRois(roi).vox.pRFtSeries(:,voxel)&cleanRois(roi).vox.pRFtSeries(:,voxel)>quantile(cleanRois(roi).vox.pRFtSeries(:,voxel),bin),voxel))];
+    lowbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+bin*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));    
+    highbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+(bin+seg)*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));
+    z = [z std(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
+    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
     end
 end
+
 x = [x bin];
 y = [y mean(z)];
+yAll{length(x)} = z;
 avg = [avg mean(avgs)];
+avgAll{length(x)} = avgs;
+
+% errorbars %
+for i = 1:1000; err(i) = mean(datasample(z,length(cleanRois(roi).vox.linearCoords)));end; err = sort(err);
+errhigh = [errhigh quantile(err,.95)-mean(z)];
+errlow = [errlow mean(z)-quantile(err,.05)];
+
+for i = 1:1000; err(i) = mean(datasample(avgs,length(cleanRois(roi).vox.linearCoords)));end; err = sort(err);
+errmeanhigh = [errmeanhigh quantile(err,.95)-mean(avgs)];
+errmeanlow = [errmeanlow mean(avgs)-quantile(err,.05)];
 end
-    
+
+% plot %
 subplot(2,length(cleanRois),roi); hold on;
-scatter(x,y*100,'black');
+%for i = 1:length(x); scatter(repmat(x(i),1,length(cleanRois(roi).vox.linearCoords)),yAll{i}*100); hold on; end;
+scatter(x,y*100,60,'black','filled'); 
+eb = errorbar(x,y*100,errlow*100,errhigh*100,'o'); eb.Color = 'black';
+
 title(sprintf('%s Residual Std by Activity Quantile',cleanRois(roi).name))
 xlabel('Quantile of Voxel Activity');
 ylabel('Noise (% signal change)');
 
 subplot(2,length(cleanRois),roi+3); hold on;
-scatter(x,avg*100,'black');plot([0,1],[0,0],'black--');
+%for i = 1:length(x); scatter(repmat(x(i),1,length(cleanRois(roi).vox.linearCoords)),avgAll{i}*100); hold on; end;
+scatter(x,avg*100,60,'black','filled');plot([0,1],[0,0],'black--');
+eb = errorbar(x,avg*100,errmeanlow*100,errmeanhigh*100,'o'); eb.Color = 'black';
+
+
 title(sprintf('%s Average Residual by Activity Quantile',cleanRois(roi).name))
 xlabel('Quantile of Voxel Activity');
 ylabel('Average Residual (% signal change)');
@@ -441,4 +467,3 @@ end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([-.5,1]);ylim([-.5,1]);
 title('V3 Time Series and Noise Correlation'); xlabel('Time Series Correlation between voxels i,j'); ylabel('Noise correlation between voxels i,j');
-
