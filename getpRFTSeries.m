@@ -26,7 +26,7 @@ graphStuff = 1; correlate = 1;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 for roi = 1:length(rois)
-for voxel = 1:rois(roi).n
+parfor voxel = 1:rois(roi).n
     
     % grab computed analyses %
     x = rois(roi).scanCoords(1,voxel); y = rois(roi).scanCoords(2,voxel); z = rois(roi).scanCoords(3,voxel);
@@ -236,7 +236,7 @@ sprintf('Graphing things (also takes about a minute)...')
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% noise std in signal absent and present time frames %%
 
-figure(9);
+
 for roi = 1:length(cleanRois)
     x = []; y = []; avg = []; errhigh = []; errlow = []; errmeanhigh = []; errmeanlow = []; yAll = []; avgAll = [];
 seg = .1; for bin = 0:seg:(1-seg)
@@ -249,6 +249,11 @@ for voxel = 1:length(cleanRois(roi).vox.linearCoords)
     avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
     end
 end
+
+figure(110)
+if roi == 1; vox2show = 212;
+showvoxclean(cleanRois, [], bin, roi, vox2show, lowbound, highbound); plot(cleanRois(roi).vox.pRFtSeries(:,vox2show)); end;
+
 
 x = [x bin];
 y = [y mean(z)];
@@ -267,6 +272,7 @@ errmeanlow = [errmeanlow mean(avgs)-quantile(err,.05)];
 end
 
 % plot %
+figure(8)
 subplot(2,length(cleanRois),roi); hold on;
 %for i = 1:length(x); scatter(repmat(x(i),1,length(cleanRois(roi).vox.linearCoords)),yAll{i}*100); hold on; end;
 scatter(x,y*100,60,'black','filled'); 
@@ -1171,6 +1177,8 @@ subplot(2,2,4)
 s3 = scatter(cleanRois(1).vox.baselineNoise(:,goodvox1),cleanRois(1).vox.baselineNoise(:,goodvox2),'black');
 xlabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',goodvox1));ylabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',goodvox2));
 title('Correlation')
+
+
 
 
 
