@@ -226,7 +226,7 @@ end
 %% graph %%
 %%%%%%%%%%%
 
-figure(9);
+cleanvoxs = 0;
 for roi = 1:length(cleanRois)
     x = []; y = []; avg = []; errhigh = []; errlow = []; errmeanhigh = []; errmeanlow = []; yAll = []; avgAll = [];
 seg = .1; for bin = 0:seg:(1-seg)
@@ -237,9 +237,14 @@ for voxel = 1:length(cleanRois(roi).vox.linearCoords)
     highbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+(bin+seg)*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));
     z = [z std(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
     avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
+    cleanvoxs = cleanvoxs + sum(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound);
     end
 end
 
+%if roi == 1; vox2show = 80; 
+%showvoxclean(cleanRois, groupRois, bin, roi, vox2show, lowbound, highbound); plot(cleanRois(roi).vox.pRFtSeries(:,vox2show)); end;
+
+z = z(~isnan(z)); avgs = avgs(~isnan(avgs));
 x = [x bin];
 y = [y mean(z)];
 yAll{length(x)} = z;
@@ -256,6 +261,7 @@ errmeanhigh = [errmeanhigh quantile(err,.95)-mean(avgs)];
 errmeanlow = [errmeanlow mean(avgs)-quantile(err,.05)];
 end
 
+figure(9);
 % plot %
 subplot(2,length(cleanRois),roi); hold on;
 %for i = 1:length(x); scatter(repmat(x(i),1,length(cleanRois(roi).vox.linearCoords)),yAll{i}*100); hold on; end;
@@ -279,4 +285,69 @@ ylabel('Average Residual (% signal change)');
 end
 
 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% bin by group prf t series %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+groupvoxs = 0;
+for roi = 1:length(cleanRois)
+    x = []; y = []; avg = []; errhigh = []; errlow = []; errmeanhigh = []; errmeanlow = []; yAll = []; avgAll = [];
+seg = .1; for bin = 0:seg:(1-seg)
+    z = []; avgs = [];
+for voxel = 1:length(cleanRois(roi).vox.linearCoords)
+    if mean(groupRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0
+    lowbound = min(groupRois(roi).vox.pRFtSeries(:,voxel))+bin*(max(groupRois(roi).vox.pRFtSeries(:,voxel))-min(groupRois(roi).vox.pRFtSeries(:,voxel)));    
+    highbound = min(groupRois(roi).vox.pRFtSeries(:,voxel))+(bin+seg)*(max(groupRois(roi).vox.pRFtSeries(:,voxel))-min(groupRois(roi).vox.pRFtSeries(:,voxel)));
+    z = [z std(cleanRois(roi).vox.baselineNoise(groupRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & groupRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
+    avgs = [avgs mean(cleanRois(roi).vox.baselineNoise(groupRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & groupRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
+    groupvoxs = groupvoxs + sum(groupRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & groupRois(roi).vox.pRFtSeries(:,voxel)<=highbound);
+    end
+end
+
+%if roi == 1; vox2show = 80;
+%showvoxclean(cleanRois, groupRois, bin, roi, vox2show, lowbound, highbound); plot(groupRois(roi).vox.pRFtSeries(:,vox2show)); end;
+
+z = z(~isnan(z)); avgs = avgs(~isnan(avgs));
+x = [x bin];
+y = [y mean(z)];
+yAll{length(x)} = z;
+avg = [avg mean(avgs)];
+avgAll{length(x)} = avgs;
+
+% errorbars %
+for i = 1:1000; err(i) = mean(datasample(z,length(cleanRois(roi).vox.linearCoords)));end; err = sort(err);
+errhigh = [errhigh quantile(err,.95)-mean(z)];
+errlow = [errlow mean(z)-quantile(err,.05)];
+
+for i = 1:1000; err(i) = mean(datasample(avgs,length(cleanRois(roi).vox.linearCoords)));end; err = sort(err);
+errmeanhigh = [errmeanhigh quantile(err,.95)-mean(avgs)];
+errmeanlow = [errmeanlow mean(avgs)-quantile(err,.05)];
+end
+
+
+figure(10)
+% plot %
+subplot(2,length(cleanRois),roi); hold on;
+%for i = 1:length(x); scatter(repmat(x(i),1,length(cleanRois(roi).vox.linearCoords)),yAll{i}*100); hold on; end;
+scatter(x,y*100,60,'black','filled'); 
+eb = errorbar(x,y*100,errlow*100,errhigh*100,'o'); eb.Color = 'black';
+
+title(sprintf('%s Residual Std by Activity Quantile',cleanRois(roi).name))
+xlabel('Quantile of Voxel Activity');
+ylabel('Noise (% signal change)');
+
+subplot(2,length(cleanRois),roi+3); hold on;
+%for i = 1:length(x); scatter(repmat(x(i),1,length(cleanRois(roi).vox.linearCoords)),avgAll{i}*100); hold on; end;
+scatter(x,avg*100,60,'black','filled');plot([0,1],[0,0],'black--');
+eb = errorbar(x,avg*100,errmeanlow*100,errmeanhigh*100,'o'); eb.Color = 'black';
+
+
+title(sprintf('%s Average Residual by Activity Quantile',cleanRois(roi).name))
+xlabel('Quantile of Voxel Activity');
+ylabel('Average Residual (% signal change)');
+
+end
 
