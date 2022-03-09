@@ -1,10 +1,7 @@
 function graphCor(filename)
 
-load(filename)
+load(filename,'cleanRois','rois')
    
-
-
-% receptive field overlaps % delete this later once i save it in the environment files
 %%%%%%%%%%%%%%%%
 %% RF Overlap %%
 %%%%%%%%%%%%%%%%
@@ -34,7 +31,7 @@ roi = 2; for row = 1:length(cleanRois(roi).vox.linearCoords)
     end
 end
 
-
+% v3 %
 roi = 3; for row = 1:length(cleanRois(roi).vox.linearCoords)
     for column = 1:length(cleanRois(roi).vox.linearCoords)       
         mu1 = 0; s1 = cleanRois(roi).vox.rfstd(column); s2 = cleanRois(roi).vox.rfstd(row);
@@ -44,9 +41,6 @@ roi = 3; for row = 1:length(cleanRois(roi).vox.linearCoords)
         v3rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
 end
-
-
-
 
 % v1/v2 
 for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
@@ -58,7 +52,7 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
         v1v2rfOverlap(roi1vox,roi2vox) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
 end
-    v1v2rfOverlap = transpose(v1v2rfOverlap);
+v1v2rfOverlap = transpose(v1v2rfOverlap);
 
 % v1/v3
 for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
@@ -70,19 +64,60 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
         v1v3rfOverlap(roi1vox,roi2vox) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
 end
-    v1v3rfOverlap = transpose(v1v3rfOverlap);
+v1v3rfOverlap = transpose(v1v3rfOverlap);
 
 
+%%%%%%%%%%%%%%%%%%%%%%
+%% voxel distances %%
+%%%%%%%%%%%%%%%%%%%%%
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% graph %%
-%%%%%%%%%%%
-    
+% v1 %
+roi = 1; for row = 1:length(cleanRois(roi).vox.linearCoords)
+    for column = 1:length(cleanRois(roi).vox.linearCoords)
+        dist = sqrt((cleanRois(roi).vox.scanCoords(1,column)-cleanRois(roi).vox.scanCoords(1,row))^2 + (cleanRois(roi).vox.scanCoords(2,column)-cleanRois(roi).vox.scanCoords(2,row))^2 + (cleanRois(roi).vox.scanCoords(3,column)-cleanRois(roi).vox.scanCoords(3,row))^2);
+        v1dist(row,column) = dist;
+    end
+end
+
+% v2 %
+roi = 2; for row = 1:length(cleanRois(roi).vox.linearCoords)
+    for column = 1:length(cleanRois(roi).vox.linearCoords)
+        dist = sqrt((cleanRois(roi).vox.scanCoords(1,column)-cleanRois(roi).vox.scanCoords(1,row))^2 + (cleanRois(roi).vox.scanCoords(2,column)-cleanRois(roi).vox.scanCoords(2,row))^2 + (cleanRois(roi).vox.scanCoords(3,column)-cleanRois(roi).vox.scanCoords(3,row))^2);
+        v2dist(row,column) = dist;
+    end
+end
+
+% v3 %
+roi = 3; for row = 1:length(cleanRois(roi).vox.linearCoords)
+    for column = 1:length(cleanRois(roi).vox.linearCoords)
+        dist = sqrt((cleanRois(roi).vox.scanCoords(1,column)-cleanRois(roi).vox.scanCoords(1,row))^2 + (cleanRois(roi).vox.scanCoords(2,column)-cleanRois(roi).vox.scanCoords(2,row))^2 + (cleanRois(roi).vox.scanCoords(3,column)-cleanRois(roi).vox.scanCoords(3,row))^2);
+        v3dist(row,column) = dist;
+    end
+end
+
+% v1/v2 
+for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
+    for roi2vox = 1:length(cleanRois(2).vox.linearCoords)
+        dist = sqrt((cleanRois(1).vox.scanCoords(1,roi1vox)-cleanRois(2).vox.scanCoords(1,roi2vox))^2 + (cleanRois(1).vox.scanCoords(2,roi1vox)-cleanRois(2).vox.scanCoords(2,roi2vox))^2 + (cleanRois(1).vox.scanCoords(3,roi1vox)-cleanRois(2).vox.scanCoords(3,roi2vox))^2);
+        v1v2dist(roi2vox,roi1vox) = dist;
+    end
+end
+
+% v1/v3
+for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
+    for roi2vox = 1:length(cleanRois(3).vox.linearCoords)
+        dist = sqrt((cleanRois(1).vox.scanCoords(1,roi1vox)-cleanRois(3).vox.scanCoords(1,roi2vox))^2 + (cleanRois(1).vox.scanCoords(2,roi1vox)-cleanRois(3).vox.scanCoords(2,roi2vox))^2 + (cleanRois(1).vox.scanCoords(3,roi1vox)-cleanRois(3).vox.scanCoords(3,roi2vox))^2);
+        v1v3dist(roi2vox,roi1vox) = dist;
+    end
+end
    
+%%%%%%%%%%%%%%%%%%%%%%%%%%% graph %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 sprintf('Graphing things (also takes about a minute)...')   
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% noise std in signal absent and present time frames %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 figure(9);
 for roi = 1:length(cleanRois)
@@ -90,7 +125,7 @@ for roi = 1:length(cleanRois)
 seg = .1; for bin = 0:seg:(1-seg)
     z = []; avgs = [];
 for voxel = 1:length(cleanRois(roi).vox.linearCoords)
-    if mean(cleanRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0
+    if mean(cleanRois(roi).vox.pRFtSeries(:,voxel)) > .5 %this fixes an issue where some model responses are centered around 0    
     lowbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+bin*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));    
     highbound = min(cleanRois(roi).vox.pRFtSeries(:,voxel))+(bin+seg)*(max(cleanRois(roi).vox.pRFtSeries(:,voxel))-min(cleanRois(roi).vox.pRFtSeries(:,voxel)));
     z = [z std(cleanRois(roi).vox.baselineNoise(cleanRois(roi).vox.pRFtSeries(:,voxel)>=lowbound & cleanRois(roi).vox.pRFtSeries(:,voxel)<=highbound ,voxel))]; 
@@ -98,6 +133,7 @@ for voxel = 1:length(cleanRois(roi).vox.linearCoords)
     end
 end
 
+avgs = avgs(~isnan(avgs)); z = z(~isnan(z));
 x = [x bin];
 y = [y mean(z)];
 yAll{length(x)} = z;
@@ -116,7 +152,6 @@ end
 
 % plot %
 subplot(2,length(cleanRois),roi); hold on;
-%for i = 1:length(x); scatter(repmat(x(i),1,length(cleanRois(roi).vox.linearCoords)),yAll{i}*100); hold on; end;
 scatter(x,y*100,60,'black','filled'); 
 eb = errorbar(x,y*100,errlow*100,errhigh*100,'o'); eb.Color = 'black';
 
@@ -125,7 +160,6 @@ xlabel('Quantile of Voxel Activity');
 ylabel('Noise (% signal change)');
 
 subplot(2,length(cleanRois),roi+3); hold on;
-%for i = 1:length(x); scatter(repmat(x(i),1,length(cleanRois(roi).vox.linearCoords)),avgAll{i}*100); hold on; end;
 scatter(x,avg*100,60,'black','filled');plot([0,1],[0,0],'black--');
 eb = errorbar(x,avg*100,errmeanlow*100,errmeanhigh*100,'o'); eb.Color = 'black';
 
@@ -137,107 +171,55 @@ ylabel('Average Residual (% signal change)');
 end
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% plot noise by slope of pRF %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% noise and receptive field overlaps cutoff by distance %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-distanceHigh = 10; distanceLow = 3;
-
-% v1 %
-figure(30); v1NoiseArrClose = v1NoiseCor(v1dist<distanceLow & v1dist>0); v1NoiseArrFar = v1NoiseCor(v1dist>distanceHigh);
-v1kldArrClose = v1rfOverlap(v1dist<distanceLow & v1dist>0); v1kldArrFar = v1rfOverlap(v1dist>distanceHigh);
-
-subplot(1,2,1);scatter(v1kldArrClose,v1NoiseArrClose);hold on;
-bins = [];noiseCorAvgs = []; step = .01;
-for bin = 0:step:40
-    if sum( (bin < v1kldArrClose) & (v1kldArrClose < bin+step) ) > 30
-        noiseCorAvg = median(v1NoiseArrClose((bin < v1kldArrClose) & (v1kldArrClose < bin+step)));
-        bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
+for roi = 1:length(cleanRois)
+    
+    allNoise = []; allSlope = []; n = []; i = []; % initialize arrays for later
+    
+    for voxel = 1:length(cleanRois(roi).vox.linearCoords)
+        
+    % get values you need %
+    noise = cleanRois(roi).vox.baselineNoise(:,voxel); 
+    prf = cleanRois(roi).vox.pRFtSeries(:,voxel); 
+    
+    % calculate slope time series %
+    slope = prf;
+    for elem = 2:239;
+        slope(elem) = (prf(elem+1) - prf(elem-1))/2;  
     end
-end
+    noise = noise(2:239)*100; slope = slope(2:239)*100; % remove first and last values
+    
+    % plot slopes %
+    figure(29); subplot(3,3,roi); hold on; scatter(slope,noise);
+    
+    % throw this voxel into group data %
+    for i = 1:length(noise); s(i) = slope(i); n(i) = noise(i);end;
+    allNoise = [allNoise n]; allSlope = [allSlope s];
 
-plot(bins,noiseCorAvgs,'black','LineWidth',5);
-title('V1 Receptive field overlap and Noise Correlations (close voxels)'); xlabel('Receptive field overlap (percent)'); ylabel('Noise correlation between voxels i,j'); xlim([0,1]); ylim([-.4,1]);
-
-
-subplot(1,2,2);scatter(v1kldArrFar,v1NoiseArrFar);hold on;
-bins = [];noiseCorAvgs = [];
-for bin = 0:step:40
-    if sum( (bin < v1kldArrFar) & (v1kldArrFar < bin+step) ) > 30
-        noiseCorAvg = median(v1NoiseArrFar((bin < v1kldArrFar) & (v1kldArrFar < bin+step)));
-        bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
     end
+
+    % density plot %
+    subplot(3,3,roi+3); 
+    binscatter(allSlope,allNoise,'XLimits',[.1,10]); hold on; binscatter(allSlope,allNoise,'XLimits',[-10,-.1]);
+    title(sprintf('Residuals by slope of pRF model, %s',cleanRois(roi).name)); xlabel('Slope of pRF Model ([t+1] - [t-1])'); ylabel('Residual (% activity)');
+    
+    % fit/plot a curve to ROI-wide data %
+    subplot(3,3,roi);
+    P = polyfit(allSlope,allNoise,1); yfit = P(1)*allSlope+P(2);
+    hold on; plot(allSlope,yfit,'b-.');
+    title(sprintf('Residuals by slope of pRF model, %s',cleanRois(roi).name))
+    xlabel('Slope of pRF Model ([t+1] - [t-1])');
+    ylabel('Residual (% activity)');
+    
+    % absolute slope value plot %
+    subplot(3,3,roi+6); 
+    binscatter(abs(allSlope),allNoise,'XLimits',[.1,10]);
+    title(sprintf('Residuals by Absolute slope of pRF model, %s',cleanRois(roi).name)); xlabel('Absolute value slope of pRF Model ([t+1] - [t-1])'); ylabel('Residual (% activity)');
+
 end
-
-plot(bins,noiseCorAvgs,'black','LineWidth',5);
-title('V1 Receptive field overlap and Noise Correlations (far voxels)'); xlabel('Receptive field overlap (percent)'); ylabel('Noise correlation between voxels i,j'); xlim([0,1]); ylim([-.4,1]);
-
-
-% v2 %
-figure(31); v2NoiseArrClose = v2NoiseCor(v2dist<distanceLow & v2dist>0); v2NoiseArrFar = v2NoiseCor(v2dist>distanceHigh);
-v2kldArrClose = v2rfOverlap(v2dist<distanceLow & v2dist>0); v2kldArrFar = v2rfOverlap(v2dist>distanceHigh);
-
-subplot(1,2,1);scatter(v2kldArrClose,v2NoiseArrClose);hold on;
-bins = [];noiseCorAvgs = [];
-for bin = 0:step:40
-    if sum( (bin < v2kldArrClose) & (v2kldArrClose < bin+step) ) > 30
-        noiseCorAvg = median(v2NoiseArrClose((bin < v2kldArrClose) & (v2kldArrClose < bin+step)));
-        bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
-    end
-end
-
-plot(bins,noiseCorAvgs,'black','LineWidth',5);
-title('v2 Receptive field overlap and Noise Correlations (close voxels)'); xlabel('Receptive field overlap (percent)'); ylabel('Noise correlation between voxels i,j'); xlim([0,1]); ylim([-.4,1]);
-
-
-subplot(1,2,2);scatter(v2kldArrFar,v2NoiseArrFar);hold on;
-bins = [];noiseCorAvgs = [];
-for bin = 0:step:40
-    if sum( (bin < v2kldArrFar) & (v2kldArrFar < bin+step) ) > 30
-        noiseCorAvg = median(v2NoiseArrFar((bin < v2kldArrFar) & (v2kldArrFar < bin+step)));
-        bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
-    end
-end
-
-plot(bins,noiseCorAvgs,'black','LineWidth',5);
-title('v2 Receptive field overlap and Noise Correlations (far voxels)'); xlabel('Receptive field overlap (percent)'); ylabel('Noise correlation between voxels i,j'); xlim([0,1]); ylim([-.4,1]);
-
-
-% v3 %
-figure(32); v3NoiseArrClose = v3NoiseCor(v3dist<distanceLow & v3dist>0); v3NoiseArrFar = v3NoiseCor(v3dist>distanceHigh);
-v3kldArrClose = v3rfOverlap(v3dist<distanceLow & v3dist>0); v3kldArrFar = v3rfOverlap(v3dist>distanceHigh);
-
-subplot(1,2,1);scatter(v3kldArrClose,v3NoiseArrClose);hold on;
-bins = [];noiseCorAvgs = [];
-for bin = 0:step:40
-    if sum( (bin < v3kldArrClose) & (v3kldArrClose < bin+step) ) > 30
-        noiseCorAvg = median(v3NoiseArrClose((bin < v3kldArrClose) & (v3kldArrClose < bin+step)));
-        bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
-    end
-end
-
-plot(bins,noiseCorAvgs,'black','LineWidth',5);
-title('v3 Receptive field overlap and Noise Correlations (close voxels)'); xlabel('Receptive field overlap (percent)'); ylabel('Noise correlation between voxels i,j'); xlim([0,1]); ylim([-.4,1]);
-
-
-subplot(1,2,2);scatter(v3kldArrFar,v3NoiseArrFar);hold on;
-bins = [];noiseCorAvgs = [];
-for bin = 0:step:40
-    if sum( (bin < v3kldArrFar) & (v3kldArrFar < bin+step) ) > 30
-        noiseCorAvg = median(v3NoiseArrFar((bin < v3kldArrFar) & (v3kldArrFar < bin+step)));
-        bins = [bins bin]; noiseCorAvgs = [noiseCorAvgs noiseCorAvg];
-    end
-end
-
-plot(bins,noiseCorAvgs,'black','LineWidth',5);
-title('v3 Receptive field overlap and Noise Correlations (far voxels)'); xlabel('Receptive field overlap (percent)'); ylabel('Noise correlation between voxels i,j'); xlim([0,1]); ylim([-.4,1]);
-
-
-
-
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -254,7 +236,7 @@ for i = 1:length(v1NoiseCor); scatter(v1rfOverlap(i,:),v1NoiseCor(i,:)); end;
 v1rfOverlapArr = reshape(v1rfOverlap,[1 length(v1rfOverlap)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
 [v1rfOverlapArr,sortOrder] = sort(v1rfOverlapArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
 
-bins = [];noiseCorAvgs = [];
+bins = [];noiseCorAvgs = []; step = .01;
 for bin = 0:step:40
     if sum( (bin < v1rfOverlapArr) & (v1rfOverlapArr < bin+step) ) > 15
         noiseCorAvg = median(v1NoiseCorArr((bin < v1rfOverlapArr) & (v1rfOverlapArr < bin+step)));
@@ -263,7 +245,7 @@ for bin = 0:step:40
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([0,1]);
-title('V1 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j (mm)');
+title('V1 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
 
 % second, do v2 %
 figure(12);hold on;subplot(1,2,1);hold on;
@@ -284,8 +266,7 @@ for bin = 0:step:40
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([0,1]);
-title('V2 Receptive Field and Noise Correlations'); xlabel('KL Divergence between voxels i,j RFs (distance)'); ylabel('Noise correlation between voxels i,j (mm)');
-
+title('V2 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap, voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
 
 % third, do v3 %
 figure(13);hold on;subplot(1,2,1);hold on;
@@ -306,8 +287,7 @@ for bin = 0:step:40
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([0,1]);
-title('V3 Receptive Field and Noise Correlations'); xlabel('KL Divergence between voxels i,j RFs (distance)'); ylabel('Noise correlation between voxels i,j (mm)');
-
+title('V3 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap, voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
 
 %between v1 and v2
 figure(14);hold on;subplot(1,2,1);hold on;
@@ -329,8 +309,7 @@ for bin = 0:step:45
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8); xlim([0,1]);
-title('Receptive Field and Noise Correlations between v1 and v2'); xlabel('KL Divergence between voxel V1i, V2j RFs (distance)'); ylabel('Noise correlation between voxel V1i, V2j (mm)');
-
+title('Receptive Field and Noise Correlations between v1 and v2'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxel V1i, V2j');
 
 %between v1 and v3
 figure(15);hold on;subplot(1,2,1);hold on;
@@ -352,9 +331,7 @@ for bin = 0:step:45
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8); xlim([0,1]);
-title('Receptive Field and Noise Correlations between v1 and v3'); xlabel('KL Divergence between voxel V1i, V3j RFs (distance)'); ylabel('Noise correlation between voxel V1i, V3j (mm)');
-
-
+title('Receptive Field and Noise Correlations between v1 and v3'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxel V1i, V3j');
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -648,9 +625,4 @@ end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8);xlim([-.5,1]);ylim([-.5,1]);
 title('V3 Time Series and Noise Correlation'); xlabel('Time Series Correlation between voxels i,j'); ylabel('Noise correlation between voxels i,j');
-
-
-
-
-
 
