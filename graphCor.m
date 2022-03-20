@@ -1,3 +1,11 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%% don't use this %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% I'm pretty sure this is useless now that i've integrated all of its
+% functionality into getprftseries. you can set the 'loaddata' argument
+% there and it functions the same. won't be updating this anymore.
+% -josh 3/20/2022.
+
+
+
 function graphCor(filename)
 
 load(filename,'cleanRois','rois')
@@ -47,7 +55,7 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
     for roi2vox = 1:length(cleanRois(2).vox.linearCoords)       
         mu1 = 0; s1 = cleanRois(1).vox.rfstd(roi1vox); s2 = cleanRois(2).vox.rfstd(roi2vox);
         mu2 = sqrt((cleanRois(1).vox.x(roi1vox)-cleanRois(2).vox.x(roi2vox))^2 + (cleanRois(1).vox.y(roi1vox)-cleanRois(2).vox.y(roi2vox))^2);
-        if mu1 == mu2 & s1 == s2; v3rfOverlap(roi1vox,roi2vox) = 1;else;
+        if mu1 == mu2 & s1 == s2; v1v2rfOverlap(roi1vox,roi2vox) = 1;else;
         c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
         v1v2rfOverlap(roi1vox,roi2vox) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
@@ -59,7 +67,7 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
     for roi2vox = 1:length(cleanRois(3).vox.linearCoords)
         mu1 = 0; s1 = cleanRois(1).vox.rfstd(roi1vox); s2 = cleanRois(3).vox.rfstd(roi2vox);
         mu2 = sqrt((cleanRois(1).vox.x(roi1vox)-cleanRois(3).vox.x(roi2vox))^2 + (cleanRois(1).vox.y(roi1vox)-cleanRois(3).vox.y(roi2vox))^2);
-        if mu1 == mu2 & s1 == s2; v3rfOverlap(roi1vox,roi2vox) = 1;else;
+        if mu1 == mu2 & s1 == s2; v1v3rfOverlap(roi1vox,roi2vox) = 1;else;
         c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
         v1v3rfOverlap(roi1vox,roi2vox) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
@@ -177,7 +185,7 @@ end
 
 for roi = 1:length(cleanRois)
     
-    allNoise = []; allSlope = []; n = []; i = []; % initialize arrays for later
+    allNoise = []; allSlope = []; n = []; s = []; % initialize arrays for later
     
     for voxel = 1:length(cleanRois(roi).vox.linearCoords)
         
