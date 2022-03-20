@@ -1,16 +1,53 @@
-function [rois cleanRois] = getpRFtSeries(overlayNum,scanNum)
+function [rois cleanRois] = getpRFtSeries(varargin)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USAGE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Takes a scan and analysis, grabs info (time series, parameters, etc) from voxels, and graphs some stuff. 
+%
+% Part 1: Saves voxel data in structures 'rois' (all  voxels) and 'cleanRois' (filtered version of 'rois' that meets 
+% certain cutoffs you can define like r2, RF width, etc). Need to do unless you have structures saved already.
+% 
+% Part 2: Takes the cleanROIs data and graphs things like RF overlap, distance, noise correlations between voxels. If you 
+% don't want to do this (ex. you just want to save the data), you can set"graphStuff = 0". But might as well graph if extracting for first time.
+%
+%
+%   Arguments you probably want to pass in:
+%
+%   loadData: pass in 1 if you to load a saved structure, else 0 to extract new from mrTools.
+%       
+%       If 0 also pass in:
+%       scanNum: Scan number. Defaults to the concat group.
+%       analysis: name of the anaylsis you want (ex: 'pRFDoG')
+%       You should also save the 'rois' and 'cleanRois' structures in a mat file for easier loading/analysis later.
+%
+%       If 1, also pass in:
+%       data: name of file with rois + cleanRois (ex. 's0401pRF.mat')
+%
+%       Example usage:
+%           Pre-extracted data:              getpRFTSeries('loadData=1','data=s0401pRF.mat')
+%           Unextracted (mrTools open):      [rois cleanRois] = getpRFTSeries('scanNum=2','analysis=pRFDoG'
+
+        
+
+%%%%%%%%%%%%%%%%%%%
+%% Get Arguments %%
+%%%%%%%%%%%%%%%%%%%
+
+loadData = 0; % default to extracting data from mrTools.
+getArgs(varargin); graphStuff = 1;
 
 
+
+if ~loadData % this is part 1 described above where you extract voxel data from mrTools if you don't have it saved already. 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Load scan info and set some parameters %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 v = newView
-v = viewSet(v,'curGroup','Concatenation');
+v = viewSet(v,'curGroup','Concatenation'); %I only run this on concats. This pre-filters them.
 nScans = viewGet(v,'nScans');
-v = viewSet(v,'curScan',1); %remember to set the scan number and analysis you want. I will automate this later
-v = loadAnalysis(v,'pRFAnal/pRF');
+v = viewSet(v,'curScan',scanNum); %remember to set the scan number and analysis you want. I will automate this later
+v = loadAnalysis(v,strcat('pRFAnal/',analysis));
 tSeries = loadTSeries(v);
 
 % manually define the ROIS you want to look at %
@@ -19,14 +56,12 @@ v2 = loadROITSeries(v,'v2')
 v3 = loadROITSeries(v,'v3')
 
 rois = [v1 v2 v3]
-
-graphStuff = 1; correlate = 1;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Get the pRF-predicted time series of all voxels in the ROI %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 for roi = 1:length(rois)
-parfor voxel = 1:rois(roi).n
+for voxel = 1:rois(roi).n
     
     % grab computed analyses %
     x = rois(roi).scanCoords(1,voxel); y = rois(roi).scanCoords(2,voxel); z = rois(roi).scanCoords(3,voxel);
@@ -104,8 +139,20 @@ cleanRois(roi).vox.pRFtSeries = rois(roi).vox.pRFtSeries(:,(eccMax>rois(roi).vox
 cleanRois(roi).vox.scanCoords = rois(roi).scanCoords(:,(eccMax>rois(roi).vox.eccentricity>eccMin)&(rois(roi).vox.r2>r2min)&(rois(roi).vox.rfHalfWidth>rfWmin)&(rfWmax>rois(roi).vox.rfHalfWidth))
 end
 
+end %done extracting data
 
 
+%%%%%%%%%%%%%%%
+%% Load data %%
+%%%%%%%%%%%%%%%
+
+% if you already have roi + CleanRoi data, load it here.
+if loadData
+load(data);
+end
+
+
+% Start of part 2 (calculating correlations, distances, then graphing).
 %%%%%%%%%%%%%%%%
 %% RF Overlap %%
 %%%%%%%%%%%%%%%%
@@ -135,7 +182,6 @@ roi = 2; for row = 1:length(cleanRois(roi).vox.linearCoords)
     end
 end
 
-
 roi = 3; for row = 1:length(cleanRois(roi).vox.linearCoords)
     for column = 1:length(cleanRois(roi).vox.linearCoords)       
         mu1 = 0; s1 = cleanRois(roi).vox.rfstd(column); s2 = cleanRois(roi).vox.rfstd(row);
@@ -145,9 +191,6 @@ roi = 3; for row = 1:length(cleanRois(roi).vox.linearCoords)
         v3rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
 end
-
-
-
 
 % v1/v2 
 for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
@@ -160,8 +203,6 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
     end
 end
 v1v2rfOverlap = transpose(v1v2rfOverlap);
-
-
 
 % v1/v3
 for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
@@ -212,7 +253,6 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
     end
 end
 
-
 % v1/v3
 for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
     for roi2vox = 1:length(cleanRois(3).vox.linearCoords)
@@ -220,10 +260,6 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
         v1v3dist(roi2vox,roi1vox) = dist;
     end
 end
-
-
-
-
 
 
 
@@ -293,7 +329,7 @@ end
 
 for roi = 1:length(cleanRois)
     
-    allNoise = []; allSlope = []; n = []; i = []; % initialize arrays for later
+    allNoise = []; allSlope = []; n = []; s = []; % initialize arrays for later
     
     for voxel = 1:length(cleanRois(roi).vox.linearCoords)
         
