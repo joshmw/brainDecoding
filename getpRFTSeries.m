@@ -1,32 +1,37 @@
-function [rois cleanRois] = getpRFtSeries(varargin)
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% USAGE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Takes a scan and analysis, grabs info (time series, parameters, etc) from voxels, and graphs some stuff. 
+%% getpRFTSeries.m %%
+%
+%       By: Josh Wilson
+%       Created: March 2022
+%
+% Takes a scan and analysis in mrTools, grabs info (time series, parameters, etc) from voxels, and graphs some stuff. 
+% cleanRois is a data frame that indexes into different rois. You define what rois you want and the order in the script. Defaults to v1,v2,v3.
 %
 % Part 1: Saves voxel data in structures 'rois' (all  voxels) and 'cleanRois' (filtered version of 'rois' that meets 
 % certain cutoffs you can define like r2, RF width, etc). Need to do unless you have structures saved already.
 % 
 % Part 2: Takes the cleanROIs data and graphs things like RF overlap, distance, noise correlations between voxels. If you 
-% don't want to do this (ex. you just want to save the data), you can set"graphStuff = 0". But might as well graph if extracting for first time.
-%
+% don't want to do this (ex. you just want to save the data), you can set "graphStuff = 0". But might as well graph if extracting for first time.
 %
 %   Arguments you probably want to pass in:
 %
-%   loadData: pass in 1 if you to load a saved structure, else 0 to extract new from mrTools.
+%   loadData: pass in 1 if you to load a saved structure, else 0 to extract new from mrTools analysis.
 %       
-%       If 0 also pass in:
-%       scanNum: Scan number. Defaults to the concat group.
-%       analysis: name of the anaylsis you want (ex: 'pRFDoG')
-%       You should also save the 'rois' and 'cleanRois' structures in a mat file for easier loading/analysis later.
+%       If 0, also pass in:
+%       scanNum: Scan number. Defaults to the concat group. I also concat everything (even single scans) to filter them.
+%       analysis: Name of the anaylsis you want (ex: 'pRFDoG', 'pRF').
+%       You should also save the 'rois' and 'cleanRois' structures in a .mat file for easier loading/analysis later.
 %
 %       If 1, also pass in:
-%       data: name of file with rois + cleanRois (ex. 's0401pRF.mat')
+%       data: name of file with rois + cleanRois (ex. 's0401pRF.mat'). Need to have rois + cleanRois saved in that file.
 %
 %       Example usage:
 %           Pre-extracted data:              getpRFTSeries('loadData=1','data=s0401pRF.mat')
 %           Unextracted (mrTools open):      [rois cleanRois] = getpRFTSeries('scanNum=2','analysis=pRFDoG'
+%
+%       
+ 
 
-        
+function [rois cleanRois] = getpRFtSeries(varargin)       
 
 %%%%%%%%%%%%%%%%%%%
 %% Get Arguments %%
@@ -34,7 +39,6 @@ function [rois cleanRois] = getpRFtSeries(varargin)
 
 loadData = 0; % default to extracting data from mrTools.
 getArgs(varargin); graphStuff = 1;
-
 
 
 if ~loadData % this is part 1 described above where you extract voxel data from mrTools if you don't have it saved already. 
@@ -262,6 +266,27 @@ for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
 end
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% get noise correlations %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+v1NoiseCor = corrcoef(cleanRois(1).vox.baselineNoise);
+v2NoiseCor = corrcoef(cleanRois(2).vox.baselineNoise);   
+v3NoiseCor = corrcoef(cleanRois(3).vox.baselineNoise);   
+v1v2NoiseCor = transpose(corr(cleanRois(1).vox.baselineNoise,cleanRois(2).vox.baselineNoise));   
+v1v3NoiseCor = transpose(corr(cleanRois(1).vox.baselineNoise,cleanRois(3).vox.baselineNoise));        
+
+v1tSeriesCor = corrcoef(cleanRois(1).vox.pRFtSeries);
+v2tSeriesCor = corrcoef(cleanRois(2).vox.pRFtSeries);
+v3tSeriesCor = corrcoef(cleanRois(3).vox.pRFtSeries);
+v1v3tSeriesCor = transpose(corr(cleanRois(1).vox.pRFtSeries,cleanRois(3).vox.pRFtSeries));        
+
+
+
+
+
+
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%% graph %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 if graphStuff
@@ -381,8 +406,6 @@ end
 % first, do v1 %
 figure(11);subplot(1,2,1);hold on;
 
-v1NoiseCor = corrcoef(cleanRois(1).vox.baselineNoise);
-
 for i = 1:length(v1NoiseCor); scatter(v1rfOverlap(i,:),v1NoiseCor(i,:)); end;
 
 v1rfOverlapArr = reshape(v1rfOverlap,[1 length(v1rfOverlap)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
@@ -401,8 +424,6 @@ title('V1 Receptive Field and Noise Correlations'); xlabel('Receptive field over
 
 % second, do v2 %
 figure(12);hold on;subplot(1,2,1);hold on;
-
-v2NoiseCor = corrcoef(cleanRois(2).vox.baselineNoise);   
 
 for i = 1:length(v2NoiseCor); scatter(v2rfOverlap(i,:),v2NoiseCor(i,:)); end;
 
@@ -423,8 +444,6 @@ title('V2 Receptive Field and Noise Correlations'); xlabel('Receptive field over
 % third, do v3 %
 figure(13);hold on;subplot(1,2,1);hold on;
 
-v3NoiseCor = corrcoef(cleanRois(3).vox.baselineNoise);   
-
 for i = 1:length(v3NoiseCor); scatter(v3rfOverlap(i,:),v3NoiseCor(i,:)); end;
 
 v3rfOverlapArr = reshape(v3rfOverlap,[1 length(v3rfOverlap)^2]); v3NoiseCorArr = reshape(v3NoiseCor,[1 length(v3NoiseCor)^2]);
@@ -443,8 +462,6 @@ title('V3 Receptive Field and Noise Correlations'); xlabel('Receptive field over
 
 %between v1 and v2
 figure(14);hold on;subplot(1,2,1);hold on;
-
-v1v2NoiseCor = transpose(corr(cleanRois(1).vox.baselineNoise,cleanRois(2).vox.baselineNoise));        
 
 for i = 1:min(size(v1v2NoiseCor)); scatter(v1v2rfOverlap(i,:),v1v2NoiseCor(i,:)); end;
 
@@ -465,8 +482,6 @@ title('Receptive Field and Noise Correlations between v1 and v2'); xlabel('Recep
 
 %between v1 and v3
 figure(15);hold on;subplot(1,2,1);hold on;
-
-v1v3NoiseCor = transpose(corr(cleanRois(1).vox.baselineNoise,cleanRois(3).vox.baselineNoise));        
 
 for i = 1:min(size(v1v3NoiseCor)); scatter(v1v3rfOverlap(i,:),v1v3NoiseCor(i,:)); end;
 
@@ -716,8 +731,6 @@ title('Distance and RF Correlations between v1 and v3'); xlabel('Distance betwee
 %% V1
 figure(26);hold on;subplot(1,3,1);hold on;
 
-v1tSeriesCor = corrcoef(cleanRois(1).vox.pRFtSeries);
-
 for i = 1:length(v1NoiseCor); scatter(v1tSeriesCor(i,:),v1NoiseCor(i,:)); end;
 
 v1tSeriesCorArr = reshape(v1tSeriesCor,[1 length(v1tSeriesCor)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
@@ -738,8 +751,6 @@ title('V1 Time Series and Noise Correlation'); xlabel('Time Series Correlation b
 %% V2
 figure(26);hold on;subplot(1,3,2);hold on;
 
-v2tSeriesCor = corrcoef(cleanRois(2).vox.pRFtSeries);
-
 for i = 1:length(v2NoiseCor); scatter(v2tSeriesCor(i,:),v2NoiseCor(i,:)); end;
 
 v2tSeriesCorArr = reshape(v2tSeriesCor,[1 length(v2tSeriesCor)^2]); v2NoiseCorArr = reshape(v2NoiseCor,[1 length(v2NoiseCor)^2]);
@@ -759,8 +770,6 @@ title('V2 Time Series and Noise Correlation'); xlabel('Time Series Correlation b
 
 %% V3
 figure(26);hold on;subplot(1,3,3);hold on;
-
-v3tSeriesCor = corrcoef(cleanRois(3).vox.pRFtSeries);
 
 for i = 1:length(v3NoiseCor); scatter(v3tSeriesCor(i,:),v3NoiseCor(i,:)); end;
 
@@ -783,13 +792,15 @@ title('V3 Time Series and Noise Correlation'); xlabel('Time Series Correlation b
 
 end  %%%%% end of graphing stuff
 
+keyboard
+
 
 dontdo = 0;if dontdo
+
+    
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% old stuff i don't think is useful %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % noise and receptive field overlaps cutoff by distance %
@@ -1164,32 +1175,35 @@ s
 sum((v1NoiseCor(:,:) < -.2) & (v1tSeriesCor(:,:) > .9))
 find((v1NoiseCor(vox,:) < -.2) & (v1tSeriesCor(vox,:) > .9))
 
+sum(v1NoiseCor(:,:) > .8)
+find(v1NoiseCor(vox,:) > .8)
 
 
 
 
-badvox1 = 24;badvox2 = 8;
+
+vox1 = 1;vox2 = 17;
 
 %plot time series%
 figure(100);close;figure(100);subplot(2,2,1)
-s1 = scatter(1:240,cleanRois(1).vox.tSeries(:,badvox1),'red');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,badvox1),'red')
-s2 = scatter(1:240,cleanRois(1).vox.tSeries(:,badvox2),'black');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,badvox2),'black')
-legend([s1 s2],{sprintf('Voxel %1.0f',badvox1),sprintf('Voxel %1.0f',badvox2)})
-title(sprintf('Voxels %1.0f,%1.0f time series (correlation = %.2f)',badvox1,badvox2,v1tSeriesCor(badvox1,badvox2))); ylabel('BOLD signal (change from average)'); xlabel('Timecourse')
+s1 = scatter(1:240,cleanRois(1).vox.tSeries(:,vox1),'red');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,vox1),'red')
+s2 = scatter(1:240,cleanRois(1).vox.tSeries(:,vox2),'black');hold on;plot(1:240,cleanRois(1).vox.pRFtSeries(:,vox2),'black')
+legend([s1 s2],{sprintf('Voxel %1.0f',vox1),sprintf('Voxel %1.0f',vox2)})
+title(sprintf('Voxels %1.0f,%1.0f time series (correlation = %.2f)',vox1,vox2,v1tSeriesCor(vox1,vox2))); ylabel('BOLD signal (change from average)'); xlabel('Timecourse')
 subplot(2,2,2)
-plot(1:240,cleanRois(1).vox.baselineNoise(:,badvox1),'red'); hold on
-plot(1:240,cleanRois(1).vox.baselineNoise(:,badvox2),'black');
-title(sprintf('Voxels %1.0f,%1.0f noise (noise correlation = %.2f)',badvox1,badvox2,v1NoiseCor(badvox1,badvox2))); xlabel('Timecourse'); ylabel('Residual BOLD signal (change from average)')
+plot(1:240,cleanRois(1).vox.baselineNoise(:,vox1),'red'); hold on
+plot(1:240,cleanRois(1).vox.baselineNoise(:,vox2),'black');
+title(sprintf('Voxels %1.0f,%1.0f noise (noise correlation = %.2f)',vox1,vox2,v1NoiseCor(vox1,vox2))); xlabel('Timecourse'); ylabel('Residual BOLD signal (change from average)')
 
 %show correlations%
 subplot(2,2,3)
-s3 = scatter(cleanRois(1).vox.tSeries(:,badvox1),cleanRois(1).vox.tSeries(:,badvox2),'black');
-xlabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',badvox1));ylabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',badvox2));
+s3 = scatter(cleanRois(1).vox.tSeries(:,vox1),cleanRois(1).vox.tSeries(:,vox2),'black');
+xlabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',vox1));ylabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',vox2));
 title('Correlation')
 
 subplot(2,2,4)
-s3 = scatter(cleanRois(1).vox.baselineNoise(:,badvox1),cleanRois(1).vox.baselineNoise(:,badvox2),'black');
-xlabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',badvox1));ylabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',badvox2));
+s3 = scatter(cleanRois(1).vox.baselineNoise(:,vox1),cleanRois(1).vox.baselineNoise(:,vox2),'black');
+xlabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',vox1));ylabel(sprintf('Voxel %1.0f Activity (BOLD signal (%)',vox2));
 title('Correlation')
 
 
