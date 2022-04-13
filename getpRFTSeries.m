@@ -14,15 +14,16 @@
 %
 %   Arguments you probably want to pass in:
 %
-%   loadData: pass in 1 if you to load a saved structure, else 0 to extract new from mrTools analysis.
-%       
+%   *loadData*: pass in 1 if you to load a saved structure, else 0 to extract new from mrTools analysis.
+%   
+%       If 1, also pass in:
+%       *data*: name of file with rois + cleanRois (ex. 's0401pRF.mat'). Need to have rois + cleanRois saved in that file.
+%
 %       If 0, also pass in:
-%       scanNum: Scan number. Defaults to the concat group. I also concat everything (even single scans) to filter them.
-%       analysis: Name of the anaylsis you want (ex: 'pRFDoG', 'pRF').
+%       *scanNum*: Scan number. Defaults to the concat group. I also concat everything (even single scans) to filter them.
+%       *analysis*: Name of the anaylsis you want (ex: 'pRFDoG', 'pRF').
 %       You should also save the 'rois' and 'cleanRois' structures in a .mat file for easier loading/analysis later.
 %
-%       If 1, also pass in:
-%       data: name of file with rois + cleanRois (ex. 's0401pRF.mat'). Need to have rois + cleanRois saved in that file.
 %
 %       Example usage:
 %           Pre-extracted data:              getpRFTSeries('loadData=1','data=s0401pRF.mat')
@@ -791,6 +792,7 @@ title('V3 Time Series and Noise Correlation'); xlabel('Time Series Correlation b
 
 
 end  %%%%% end of graphing stuff
+
 
 keyboard
 
