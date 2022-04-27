@@ -1,21 +1,57 @@
-%%%%%%%%%%%%%%%%
 %% synthCor.m %%
-%%%%%%%%%%%%%%%%
+%
+%       By: Josh Wilson
+%       Created: April 2022
+%
+% Synthesizes voxel time series data with one encoding model and retrieves it with another. Saves all voxel info--ground truth parameters as well as
+% recovered params and time series--into a data structure. Plots the relationship between receptive field overlap and noise correlation (from the fit
+% receptive fields). 
+%
+%
+% Pipeline:
+%   1. Generate random pRF parameters.
+%   2. Synthesize true time series from encoding model (specified in input).
+%       Convolved the overlap of the receptive field with stimMovie and convolves with hdrf
+%   3. Add gaussian noise to each time point in the series. 
+%   4. Fit a simple gaussian receptive field to the noisy true time series by minimizing squared residual error.
+%       You can add other receptive field models to synthesize or decode.
+%
+%
+% Usage:
+%   synthCor(numVoxels,encodingModel)
+%
+%   Example:
+%       [vox param] = synthCor(1000, 'gaussianDoG')
 
-function synthCor(numVoxels,rfType)
 
-fieldSize = 100;
-volumes = 20;
-sweeps = 10;
+function [vox param] = synthCor(numVoxels,rfType)
+
+
+%% Set visual field parameters %%
+param.fieldSize = 60;
+param.volumes = 15;
+param.sweeps = 10;
+
+param.noiseMag = 3; %divide std of tseries by param.noiseMag to generate gaussian noise: lower = more noise
+param.negDoGFactor = 2; %magnitude of the negative difference of gaussian factor
+param.DoGsize = 2; %size of the inhibitory gaussian receptive field relative to excitatory (std)
+param.rectify = 1; %relu rectification for negative receptive field pixels
+
+param.horizontal = round(rand(1,param.sweeps)); 
+param.reverse = round(rand(1,param.sweeps)); 
+
+param.rfSynthType = rfType;
+
 vox = [];
 
+%% Synthesize the voxels %%
 for voxel = 1:numVoxels
-    vox = synthVoxel(vox,voxel,rfType,fieldSize,volumes,sweeps);
+    vox = synthVoxel(vox,voxel,rfType,param);
+    [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
     if mod(voxel/numVoxels*100,20) == 0
-        disp(sprintf('Synthesizing voxels: %i percent done', voxel/numVoxels*100))
+        fprintf('Synthesizing voxels: %i percent done\n', voxel/numVoxels*100)
     end
 end
-
 
 %% Receptive field Overlap %%
 rfOverlapRec = zeros(numVoxels);
@@ -31,14 +67,13 @@ for row = 1:numVoxels
     end
 end
         
-
 %% Noise Correlation %%
 for row = 1:numVoxels
     for column = 1:numVoxels
         noiseCor(row,column) = corr2(vox{row}.noiseSeries,vox{column}.noiseSeries);
     end
 end
-keyboard
+
 
 %% plot %%
 figure;hold on;
@@ -58,25 +93,15 @@ plot(bins,noiseCorAvgs,'black','LineWidth',8);
 title('V1 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
 
 
-keyboard
-
-
-
-
-
 
 %%%%%%%%%%%%%%%%
 %% synthVoxel %%
 %%%%%%%%%%%%%%%%
-function [vox, stimMovie] = synthVoxel(vox,voxel,rfType,fieldSize,volumes,sweeps)
+function [vox, stimMovie] = synthVoxel(vox,voxel,rfType,param)
 
 
 %% set parameters %%
-horizontal = round(rand(1,sweeps)); 
-reverse = round(rand(1,sweeps)); 
-fitParams.framePeriod = 1; %seconds
-noiseMag = 5; %divide std of tseries by noisemag to generate gaussian noise: lower = more noise
-negDoGFactor = 2; %magnitude of the negative difference of gaussian factor
+fitparam.framePeriod = 1; %seconds
 
 p.canonical.type = 'gamma';
 p.canonical.lengthInSeconds = 20;
@@ -87,65 +112,74 @@ p.canonical.offset = 0;
 
 
 %% Make the stimulus movie %%
-
-stimMovie = zeros(fieldSize,fieldSize,volumes*sweeps);
-for sweep = 1:sweeps
-    for volume = 1:(volumes)
+stimMovie = zeros(param.fieldSize,param.fieldSize,param.volumes*param.sweeps);
+for sweep = 1:param.sweeps
+    for volume = 1:(param.volumes)
         
-        if horizontal(sweep)
-            if reverse(sweep)
-                stimMovie((fieldSize/volumes*(volumes-volume+1)-fieldSize/volumes+1):(fieldSize/volumes*(volumes-volume+1)), : ,(sweep-1)*volumes+volume) = 1;
+        if param.horizontal(sweep)
+            if param.reverse(sweep)
+                stimMovie((param.fieldSize/param.volumes*(param.volumes-volume+1)-param.fieldSize/param.volumes+1):(param.fieldSize/param.volumes*(param.volumes-volume+1)), : ,(sweep-1)*param.volumes+volume) = 1;
             else
-                stimMovie((fieldSize/volumes*(volume)-fieldSize/volumes+1):fieldSize/volumes*(volume), : ,(sweep-1)*volumes+volume) = 1;
+                stimMovie((param.fieldSize/param.volumes*(volume)-param.fieldSize/param.volumes+1):param.fieldSize/param.volumes*(volume), : ,(sweep-1)*param.volumes+volume) = 1;
             end
         else
-            if reverse(sweep)
-                stimMovie(:, (fieldSize/volumes*(volumes-volume+1)-fieldSize/volumes+1):(fieldSize/volumes*(volumes-volume+1)), (sweep-1)*volumes+volume) = 1;
+            if param.reverse(sweep)
+                stimMovie(:, (param.fieldSize/param.volumes*(param.volumes-volume+1)-param.fieldSize/param.volumes+1):(param.fieldSize/param.volumes*(param.volumes-volume+1)), (sweep-1)*param.volumes+volume) = 1;
             else
-                stimMovie(:, (fieldSize/volumes*(volume)-fieldSize/volumes+1):fieldSize/volumes*(volume), (sweep-1)*volumes+volume) = 1;
+                stimMovie(:, (param.fieldSize/param.volumes*(volume)-param.fieldSize/param.volumes+1):param.fieldSize/param.volumes*(volume), (sweep-1)*param.volumes+volume) = 1;
             end
         end
 
     end
 end
 
+
 %% Make the receptive field %%
-%gaussian receptive field
+% Gaussian receptive field %
 if strcmp(rfType,'gaussian')
-    x = round(fieldSize*(.1)) + round((fieldSize*(.8)).*rand);
-    y = round(fieldSize*(.1)) + round((fieldSize*(.8)).*rand);
-    sx = round(fieldSize*(.05)) + round((fieldSize*(.2)).*rand); sy=sx;
-    gaussian1 = normpdf([1:fieldSize],x,sx);
-    gaussian2 = normpdf(transpose([1:fieldSize]),y,sy);
+    x = round(param.fieldSize*(.1)) + round((param.fieldSize*(.8)).*rand);
+    y = round(param.fieldSize*(.1)) + round((param.fieldSize*(.8)).*rand);
+    sx = round(param.fieldSize*(.05)) + round((param.fieldSize*(.2)).*rand); sy=sx;
+    gaussian1 = normpdf([1:param.fieldSize],x,sx);
+    gaussian2 = normpdf(transpose([1:param.fieldSize]),y,sy);
     rf = gaussian2*gaussian1;
+% Difference of Gaussians Receptive Field %
 elseif strcmp(rfType,'gaussianDiff')
-    x = round(fieldSize*(.1)) + round((fieldSize*(.8)).*rand);
-    y = round(fieldSize*(.1)) + round((fieldSize*(.8)).*rand);
-    sx = round(fieldSize*(.05)) + round((fieldSize*(.2)).*rand); sy=sx; sx2 = 2*sx; sy2 = 2*sy;
-    gaussian1 = normpdf([1:fieldSize],x,sx);
-    gaussian2 = normpdf(transpose([1:fieldSize]),y,sy);
-    gaussianDiff1 = normpdf([1:fieldSize],x,sx2);
-    gaussianDiff2 = normpdf(transpose([1:fieldSize]),y,sy2);
-    rf = gaussian2*gaussian1 - (gaussianDiff2*gaussianDiff1)/negDoGFactor;
+    x = round(param.fieldSize*(.1)) + round((param.fieldSize*(.8)).*rand);
+    y = round(param.fieldSize*(.1)) + round((param.fieldSize*(.8)).*rand);
+    sx = round(param.fieldSize*(.05)) + round((param.fieldSize*(.2)).*rand); sy=sx; sx2 = param.DoGsize*sx; sy2 = param.DoGsize*sy;
+    gaussian1 = normpdf([1:param.fieldSize],x,sx);
+    gaussian2 = normpdf(transpose([1:param.fieldSize]),y,sy);
+    gaussianDiff1 = normpdf([1:param.fieldSize],x,sx2);
+    gaussianDiff2 = normpdf(transpose([1:param.fieldSize]),y,sy2);
+    rf = gaussian2*gaussian1 - (gaussianDiff2*gaussianDiff1)/param.negDoGFactor;
+    if param.rectify; % 
+        rf(rf<0) = 0;
+    end
 end
 
 
 %% signal time series %%
-hrf = getCanonicalHRF(p.canonical,fitParams.framePeriod);
-tseries = getModelTSeries(stimMovie,rf,sweeps,volumes,hrf);
-noisytSeries = tseries + normrnd(0,std(tseries)/noiseMag,[1 length(tseries)]);
+hrf = getCanonicalHRF(p.canonical,fitparam.framePeriod);
+tseries = getModelTSeries(stimMovie,rf,param,hrf);
+
+%% add gaussian noise to time series %%
+noisytSeries = tseries + normrnd(0,std(tseries)/param.noiseMag,[1 length(tseries)]);
 
 
 %% recover time series from noisytSeries %%
-startparams(1) = fieldSize/2; startparams(2) = fieldSize/2; startparams(3) = fieldSize/10;
-[params] = fminsearch(@getModelResidual,startparams,[],noisytSeries,hrf,stimMovie,fieldSize,volumes,sweeps);
+startparams(1) = param.fieldSize/2; startparams(2) = param.fieldSize/2; startparams(3) = param.fieldSize/10; %start in center with param.fieldSize/10 std
+minsearch = [0 0 .5]; maxsearch = [param.fieldSize param.fieldSize inf]; opts = optimset('display','off'); %constrain search to visual field and >.5 std
 
-recgaussian1 = normpdf([1:fieldSize],params(1),params(3));
-recgaussian2 = normpdf(transpose([1:fieldSize]),params(2),params(3));
+[params] = lsqnonlin(@getModelResidual,startparams,minsearch,maxsearch,opts,noisytSeries,hrf,stimMovie,param);
+
+recgaussian1 = normpdf([1:param.fieldSize],params(1),params(3));
+recgaussian2 = normpdf(transpose([1:param.fieldSize]),params(2),params(3));
 recrf = recgaussian2*recgaussian1;
-rectSeries = getModelTSeries(stimMovie,recrf,sweeps,volumes,hrf);
+rectSeries = getModelTSeries(stimMovie,recrf,param,hrf);
 
-% grab things to return
+
+%% grab things to return %%
 vox{voxel}.hrf = hrf;
 vox{voxel}.OGparams = [x y sx];
 vox{voxel}.Rparams = params;
@@ -156,21 +190,23 @@ vox{voxel}.noisyTrueSeries = noisytSeries;
 vox{voxel}.recoveredSeries = rectSeries;
 vox{voxel}.noiseSeries = noisytSeries-rectSeries;
 vox{voxel}.rfType = rfType;
+vox{1}.stimMovie = stimMovie;
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%
 %% getModelResidual %%
 %%%%%%%%%%%%%%%%%%%%%%
-function residual = getModelResidual(params,noisytSeries,hrf,stimMovie,fieldSize,volumes,sweeps)
+function residual = getModelResidual(params,noisytSeries,hrf,stimMovie,param)
 x = params(1); y = params(2); sx = params(3); sy = sx;
-gaussian1 = normpdf([1:fieldSize],x,sx);
-gaussian2 = normpdf(transpose([1:fieldSize]),y,sy);
+gaussian1 = normpdf([1:param.fieldSize],x,sx);
+gaussian2 = normpdf(transpose([1:param.fieldSize]),y,sy);
 rf = gaussian2*gaussian1;
 
 
 %% signal time series %%
 % neural response
-for t = 1:volumes*sweeps
+for t = 1:param.volumes*param.sweeps
     ntseries(t) = sum(sum(stimMovie(:,:,t).*rf));
     time(t) = t;
 end
@@ -178,18 +214,20 @@ tseries = conv(ntseries,hrf.hrf);
 residual = sumsqr(noisytSeries - tseries);
 
 
+
 %%%%%%%%%%%%%%%%%%%%%
 %% getModelTSeries %%
 %%%%%%%%%%%%%%%%%%%%%
-function tseries = getModelTSeries(stimMovie,rf,sweeps,volumes,hrf)
+function tseries = getModelTSeries(stimMovie,rf,param,hrf)
 % neural response
-for t = 1:volumes*sweeps
+for t = 1:param.volumes*param.sweeps
     ntseries(t) = sum(sum(stimMovie(:,:,t).*rf));
     time(t) = t;
 end
 
-% convolve neural and hrf; add noise
+% convolve neural and hrf
 tseries = conv(ntseries,hrf.hrf);
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%
@@ -204,6 +242,7 @@ hrf.hrf = getGammaHRF(hrf.time,params);
 hrf.hrf = hrf.hrf / max(hrf.hrf);
 
 
+
 %%%%%%%%%%%%%%%%%%%%%
 %%   getGammaHRF   %%
 %%%%%%%%%%%%%%%%%%%%%
@@ -211,6 +250,7 @@ function fun = getGammaHRF(time,p)
 
 fun = thisGamma(time,1,p.timelag,p.offset,p.tau,p.exponent)/100;
 % add second gamma if this is a difference of gammas fit
+
 
 
 %%%%%%%%%%%%%%%%%%%
