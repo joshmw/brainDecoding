@@ -11,28 +11,39 @@
 % Pipeline:
 %   1. Generate random pRF parameters.
 %   2. Synthesize true time series from encoding model (specified in input).
-%       Convolved the overlap of the receptive field with stimMovie and convolves with hdrf
-%   3. Add gaussian noise to each time point in the series. 
+%       Convolve stimulus overlap time series (rf .* stimMovie) with hdr.
+%   3. Add gaussian noise to each time point in the time series. 
 %   4. Fit a simple gaussian receptive field to the noisy true time series by minimizing squared residual error.
 %       You can add other receptive field models to synthesize or decode.
+%   5. Plot relationship between receptive field overlap (recovered) and noise correlation between voxels.
+%
+% Things you can specify:
+%   params:
+%       fieldSize: Size of the receptive field (pixels). True RF parameters are generated based on this size.
+%       volumes: How fast the stimulus travels (time for full sweep across RF). For this and hdr, I'm thinking in seconds.
+%       sweeps: Numer of stimulus sweeps across RF. Should be minimum 10 (bars sweep randomly horizontal/vertical in forward/reverse).
+%   noiseMag: Amount of gaussian noise you add to the true time series. Lower = more.
+%   negDoGFactor: For DoG encoding model, divide the surround RF by this value before subtracting.
+%   DoGsize: Size of surround DoG receptive field relative to center (divide by value).
+%   rectify: If 1, will perform ReLU on DoG RF. If 0, won't.
 %
 %
 % Usage:
 %   synthCor(numVoxels,encodingModel)
 %
 %   Example:
-%       [vox param] = synthCor(1000, 'gaussianDoG')
+%       [vox param] = synthCor(1000, 'gaussianDiff')
 
 
-function [vox param] = synthCor(numVoxels,rfType)
+function [vox param rfOverlapRec noiseCor] = synthCor(numVoxels,rfType);
 
 
 %% Set visual field parameters %%
-param.fieldSize = 60;
-param.volumes = 15;
+param.fieldSize = 80;
+param.volumes = 20;
 param.sweeps = 10;
 
-param.noiseMag = 3; %divide std of tseries by param.noiseMag to generate gaussian noise: lower = more noise
+param.noiseMag = 5; %divide std of tseries by param.noiseMag to generate gaussian noise: lower = more noise
 param.negDoGFactor = 2; %magnitude of the negative difference of gaussian factor
 param.DoGsize = 2; %size of the inhibitory gaussian receptive field relative to excitatory (std)
 param.rectify = 1; %relu rectification for negative receptive field pixels
@@ -147,7 +158,7 @@ if strcmp(rfType,'gaussian')
 elseif strcmp(rfType,'gaussianDiff')
     x = round(param.fieldSize*(.1)) + round((param.fieldSize*(.8)).*rand);
     y = round(param.fieldSize*(.1)) + round((param.fieldSize*(.8)).*rand);
-    sx = round(param.fieldSize*(.05)) + round((param.fieldSize*(.2)).*rand); sy=sx; sx2 = param.DoGsize*sx; sy2 = param.DoGsize*sy;
+    sx = round(param.fieldSize*(.05)) + round((param.fieldSize*(.15)).*rand); sy=sx; sx2 = param.DoGsize*sx; sy2 = param.DoGsize*sy;
     gaussian1 = normpdf([1:param.fieldSize],x,sx);
     gaussian2 = normpdf(transpose([1:param.fieldSize]),y,sy);
     gaussianDiff1 = normpdf([1:param.fieldSize],x,sx2);
@@ -169,7 +180,7 @@ noisytSeries = tseries + normrnd(0,std(tseries)/param.noiseMag,[1 length(tseries
 
 %% recover time series from noisytSeries %%
 startparams(1) = param.fieldSize/2; startparams(2) = param.fieldSize/2; startparams(3) = param.fieldSize/10; %start in center with param.fieldSize/10 std
-minsearch = [0 0 .5]; maxsearch = [param.fieldSize param.fieldSize inf]; opts = optimset('display','off'); %constrain search to visual field and >.5 std
+minsearch = [0 0 param.fieldSize/50]; maxsearch = [param.fieldSize param.fieldSize inf]; opts = optimset('display','off'); %constrain search to visual field and >.5 std
 
 [params] = lsqnonlin(@getModelResidual,startparams,minsearch,maxsearch,opts,noisytSeries,hrf,stimMovie,param);
 
