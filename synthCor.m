@@ -24,7 +24,7 @@
 %       sweeps: Numer of stimulus sweeps across RF. Should be minimum 10 (bars sweep randomly horizontal/vertical in forward/reverse).
 %   noiseMag: Amount of gaussian noise you add to the true time series. Lower = more.
 %   negDoGFactor: For DoG encoding model, divide the surround RF by this value before subtracting.
-%   DoGsize: Size of surround DoG receptive field relative to center (divide by value).
+%   DoGsize: Size of surround DoG receptive field relative to center.
 %   rectify: If 1, will perform ReLU on DoG RF. If 0, won't.
 %
 %
@@ -43,7 +43,7 @@ param.fieldSize = 80;
 param.volumes = 20;
 param.sweeps = 10;
 
-param.noiseMag = 5; %divide std of tseries by param.noiseMag to generate gaussian noise: lower = more noise
+param.noiseMag = 3; %divide std of tseries by param.noiseMag to generate gaussian noise: lower = more noise
 param.negDoGFactor = 2; %magnitude of the negative difference of gaussian factor
 param.DoGsize = 2; %size of the inhibitory gaussian receptive field relative to excitatory (std)
 param.rectify = 1; %relu rectification for negative receptive field pixels
