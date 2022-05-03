@@ -22,7 +22,7 @@
 %       fieldSize: Size of the receptive field (pixels). True RF parameters are generated based on this size.
 %       volumes: How fast the stimulus travels (time for full sweep across RF). For this and hdr, I'm thinking in seconds.
 %       sweeps: Numer of stimulus sweeps across RF. Should be minimum 10 (bars sweep randomly horizontal/vertical in forward/reverse).
-%   noiseMag: Amount of gaussian noise you add to the true time series. Lower = more.
+%   gaussNoiseMag: Amount of gaussian noise you add to the true time series. Lower = more.
 %   negDoGFactor: For DoG encoding model, divide the surround RF by this value before subtracting.
 %   DoGsize: Size of surround DoG receptive field relative to center.
 %   rectify: If 1, will perform ReLU on DoG RF. If 0, won't.
@@ -38,12 +38,19 @@
 function [vox param rfOverlapRec noiseCor] = synthCor(numVoxels,rfType);
 
 
-%% Set visual field parameters %%
-param.fieldSize = 80;
-param.volumes = 20;
+%% Set parameters %%
+param.fieldSize = 80; 
+param.volumes = 20; 
 param.sweeps = 10;
 
-param.noiseMag = 3; %divide std of tseries by param.noiseMag to generate gaussian noise: lower = more noise
+param.correlatedNoise = 0; %1 to add correlated noise to all time series
+param.gaussianNoise = 1; %1 to add random gaussian noise to independent time series
+
+param.globalNoiseCorrelation = 1;
+param.theta = .2; %strength at which global noise returns to 0
+param.gaussNoiseMag = 3; %divide std of tseries by param.gaussNoiseMag to generate gaussian noise: lower = more noise
+param.globalNoiseMag = 5;
+
 param.negDoGFactor = 2; %magnitude of the negative difference of gaussian factor
 param.DoGsize = 2; %size of the inhibitory gaussian receptive field relative to excitatory (std)
 param.rectify = 1; %relu rectification for negative receptive field pixels
@@ -52,17 +59,43 @@ param.horizontal = round(rand(1,param.sweeps));
 param.reverse = round(rand(1,param.sweeps)); 
 
 param.rfSynthType = rfType;
-
 vox = [];
 
-%% Synthesize the voxels %%
+param.p.canonical.type = 'gamma';
+param.p.canonical.lengthInSeconds = 20;
+param.p.canonical.timelag = 1;
+param.p.canonical.tau = .6;
+param.p.canonical.exponent = 6;
+param.p.canonical.offset = 0;
+
+
+%% Synthesize the receptive fields %%
 for voxel = 1:numVoxels
-    vox = synthVoxel(vox,voxel,rfType,param);
+    vox = synthRF(vox,voxel,param,rfType);
+end
+
+
+%% Create the correlated noise structure to add to voxels %%
+correlatedNoise = correlateNoise(param,vox);
+
+
+%% Make the stimulus Movie %%
+stimMovie = makeStimMovie(param);
+
+
+%% Synth Time series w/ noise and fit receptive fields to voxels %% 
+
+for voxel = 1:numVoxels
+    vox = recoverRF(vox,voxel,param,stimMovie,correlatedNoise);
     [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
     if mod(voxel/numVoxels*100,20) == 0
         fprintf('Synthesizing voxels: %i percent done\n', voxel/numVoxels*100)
     end
 end
+
+
+
+
 
 %% Receptive field Overlap %%
 rfOverlapRec = zeros(numVoxels);
@@ -105,44 +138,37 @@ title('V1 Receptive Field and Noise Correlations'); xlabel('Receptive field over
 
 
 
-%%%%%%%%%%%%%%%%
-%% synthVoxel %%
-%%%%%%%%%%%%%%%%
-function [vox, stimMovie] = synthVoxel(vox,voxel,rfType,param)
+%% end of program %%
 
 
-%% set parameters %%
-fitparam.framePeriod = 1; %seconds
-
-p.canonical.type = 'gamma';
-p.canonical.lengthInSeconds = 20;
-p.canonical.timelag = 1;
-p.canonical.tau = .6;
-p.canonical.exponent = 6;
-p.canonical.offset = 0;
 
 
-%% Make the stimulus movie %%
-stimMovie = zeros(param.fieldSize,param.fieldSize,param.volumes*param.sweeps);
-for sweep = 1:param.sweeps
-    for volume = 1:(param.volumes)
-        
-        if param.horizontal(sweep)
-            if param.reverse(sweep)
-                stimMovie((param.fieldSize/param.volumes*(param.volumes-volume+1)-param.fieldSize/param.volumes+1):(param.fieldSize/param.volumes*(param.volumes-volume+1)), : ,(sweep-1)*param.volumes+volume) = 1;
-            else
-                stimMovie((param.fieldSize/param.volumes*(volume)-param.fieldSize/param.volumes+1):param.fieldSize/param.volumes*(volume), : ,(sweep-1)*param.volumes+volume) = 1;
-            end
-        else
-            if param.reverse(sweep)
-                stimMovie(:, (param.fieldSize/param.volumes*(param.volumes-volume+1)-param.fieldSize/param.volumes+1):(param.fieldSize/param.volumes*(param.volumes-volume+1)), (sweep-1)*param.volumes+volume) = 1;
-            else
-                stimMovie(:, (param.fieldSize/param.volumes*(volume)-param.fieldSize/param.volumes+1):param.fieldSize/param.volumes*(volume), (sweep-1)*param.volumes+volume) = 1;
-            end
-        end
 
-    end
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%
+%% correlateNoise %%
+%%%%%%%%%%%%%%%%%%%%
+function correlatedNoise = correlateNoise(param,vox)
+
+
+%% global Ornstein Uhlenbeck noise %%
+correlatedNoise.global(1) = 0;
+for volume = 2:param.sweeps*param.volumes+param.p.canonical.lengthInSeconds
+    correlatedNoise.global(volume) = correlatedNoise.global(volume-1) - param.theta*correlatedNoise.global(volume-1) + normrnd(0,1);
 end
+
+if param.correlatedNoise == 0; correlatedNoise.global(1:param.sweeps*param.volumes+param.p.canonical.lengthInSeconds) = 0; end;
+
+
+
+
+%%%%%%%%%%%%%%%%
+%% synthRF %%
+%%%%%%%%%%%%%%%%
+function vox = synthRF(vox,voxel,param,rfType)
 
 
 %% Make the receptive field %%
@@ -170,12 +196,34 @@ elseif strcmp(rfType,'gaussianDiff')
 end
 
 
-%% signal time series %%
-hrf = getCanonicalHRF(p.canonical,fitparam.framePeriod);
-tseries = getModelTSeries(stimMovie,rf,param,hrf);
+%% grab things to return %%
+vox{voxel}.OGparams = [x y sx];
+vox{voxel}.OGrf = rf;
+vox{voxel}.rfType = rfType;
 
-%% add gaussian noise to time series %%
-noisytSeries = tseries + normrnd(0,std(tseries)/param.noiseMag,[1 length(tseries)]);
+
+
+%%%%%%%%%%%%%%%
+%% recoverRF %%
+%%%%%%%%%%%%%%%
+function vox = recoverRF(vox,voxel,param,stimMovie,correlatedNoise)
+
+%% set parameters %%
+fitparam.framePeriod = 1; %seconds
+
+
+%% signal time series %%
+hrf = getCanonicalHRF(param.p.canonical,fitparam.framePeriod);
+tseries = getModelTSeries(stimMovie,vox{voxel}.OGrf,param,hrf);
+
+
+%% add  noise to time series %%
+if param.gaussianNoise
+    tseries = tseries + normrnd(0,1,[1 length(tseries)])*std(tseries)/param.gaussNoiseMag; %gaussian noise
+end
+
+noisytSeries = tseries + correlatedNoise.global*std(tseries)/param.globalNoiseMag;
+
 
 
 %% recover time series from noisytSeries %%
@@ -192,16 +240,12 @@ rectSeries = getModelTSeries(stimMovie,recrf,param,hrf);
 
 %% grab things to return %%
 vox{voxel}.hrf = hrf;
-vox{voxel}.OGparams = [x y sx];
 vox{voxel}.Rparams = params;
-vox{voxel}.OGrf = rf;
 vox{voxel}.Rrf = recrf;
 vox{voxel}.trueSeries = tseries;
 vox{voxel}.noisyTrueSeries = noisytSeries;
 vox{voxel}.recoveredSeries = rectSeries;
 vox{voxel}.noiseSeries = noisytSeries-rectSeries;
-vox{voxel}.rfType = rfType;
-vox{1}.stimMovie = stimMovie;
 
 
 
@@ -284,6 +328,33 @@ end
 gammafun = (amplitude*gammafun+offset);
 
 
+
+%%%%%%%%%%%%%%%%%%%
+%% makeStimMovie %%
+%%%%%%%%%%%%%%%%%%%
+function stimMovie = makeStimMovie(param)
+
+stimMovie = zeros(param.fieldSize,param.fieldSize,param.volumes*param.sweeps);
+
+for sweep = 1:param.sweeps
+    for volume = 1:(param.volumes)
+        
+        if param.horizontal(sweep)
+            if param.reverse(sweep)
+                stimMovie((param.fieldSize/param.volumes*(param.volumes-volume+1)-param.fieldSize/param.volumes+1):(param.fieldSize/param.volumes*(param.volumes-volume+1)), : ,(sweep-1)*param.volumes+volume) = 1;
+            else
+                stimMovie((param.fieldSize/param.volumes*(volume)-param.fieldSize/param.volumes+1):param.fieldSize/param.volumes*(volume), : ,(sweep-1)*param.volumes+volume) = 1;
+            end
+        else
+            if param.reverse(sweep)
+                stimMovie(:, (param.fieldSize/param.volumes*(param.volumes-volume+1)-param.fieldSize/param.volumes+1):(param.fieldSize/param.volumes*(param.volumes-volume+1)), (sweep-1)*param.volumes+volume) = 1;
+            else
+                stimMovie(:, (param.fieldSize/param.volumes*(volume)-param.fieldSize/param.volumes+1):param.fieldSize/param.volumes*(volume), (sweep-1)*param.volumes+volume) = 1;
+            end
+        end
+
+    end
+end
 
 
 
