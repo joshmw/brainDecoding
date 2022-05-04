@@ -35,7 +35,7 @@
 %       [vox param] = synthCor(1000, 'gaussianDiff')
 
 
-function [vox param rfOverlapRec noiseCor] = synthCor(numVoxels,rfType);
+function [vox param rfOverlapRec noiseCor correlatedNoise] = synthCor(numVoxels,rfType);
 
 
 %% Set parameters %%
@@ -43,13 +43,18 @@ param.fieldSize = 80;
 param.volumes = 20; 
 param.sweeps = 10;
 
-param.correlatedNoise = 0; %1 to add correlated noise to all time series
-param.gaussianNoise = 1; %1 to add random gaussian noise to independent time series
+param.globalNoise = 1; %1 to add correlated noise to all time series
+param.gaussianCorrelatedNoise = 1; %1 to add random gaussian noise correlated between voxels
+param.gaussianIndNoise = 0; %1 to add random gaussian noise to independent time series
 
-param.globalNoiseCorrelation = 1;
 param.theta = .2; %strength at which global noise returns to 0
+param.rho = 0.2; %gaussian noise individual covariance (1 = dependent)
+param.varStd = .05; %std of individual voxel variance
+param.varAvg = .03; %mean of individual voxel variance
+
+
 param.gaussNoiseMag = 3; %divide std of tseries by param.gaussNoiseMag to generate gaussian noise: lower = more noise
-param.globalNoiseMag = 5;
+param.globalNoiseMag = 15;
 
 param.negDoGFactor = 2; %magnitude of the negative difference of gaussian factor
 param.DoGsize = 2; %size of the inhibitory gaussian receptive field relative to excitatory (std)
@@ -57,16 +62,16 @@ param.rectify = 1; %relu rectification for negative receptive field pixels
 
 param.horizontal = round(rand(1,param.sweeps)); 
 param.reverse = round(rand(1,param.sweeps)); 
-
 param.rfSynthType = rfType;
 vox = [];
-
 param.p.canonical.type = 'gamma';
 param.p.canonical.lengthInSeconds = 20;
 param.p.canonical.timelag = 1;
 param.p.canonical.tau = .6;
 param.p.canonical.exponent = 6;
 param.p.canonical.offset = 0;
+param.numVols = param.sweeps*param.volumes+param.p.canonical.lengthInSeconds;
+
 
 
 %% Synthesize the receptive fields %%
@@ -76,7 +81,7 @@ end
 
 
 %% Create the correlated noise structure to add to voxels %%
-correlatedNoise = correlateNoise(param,vox);
+[correlatedNoise, param] = correlateNoise(param,vox,numVoxels);
 
 
 %% Make the stimulus Movie %%
@@ -84,7 +89,6 @@ stimMovie = makeStimMovie(param);
 
 
 %% Synth Time series w/ noise and fit receptive fields to voxels %% 
-
 for voxel = 1:numVoxels
     vox = recoverRF(vox,voxel,param,stimMovie,correlatedNoise);
     [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
@@ -92,9 +96,6 @@ for voxel = 1:numVoxels
         fprintf('Synthesizing voxels: %i percent done\n', voxel/numVoxels*100)
     end
 end
-
-
-
 
 
 %% Receptive field Overlap %%
@@ -151,18 +152,35 @@ title('V1 Receptive Field and Noise Correlations'); xlabel('Receptive field over
 %%%%%%%%%%%%%%%%%%%%
 %% correlateNoise %%
 %%%%%%%%%%%%%%%%%%%%
-function correlatedNoise = correlateNoise(param,vox)
+function [correlatedNoise param] = correlateNoise(param,vox,numVoxels)
 
 
 %% global Ornstein Uhlenbeck noise %%
-correlatedNoise.global(1) = 0;
-for volume = 2:param.sweeps*param.volumes+param.p.canonical.lengthInSeconds
-    correlatedNoise.global(volume) = correlatedNoise.global(volume-1) - param.theta*correlatedNoise.global(volume-1) + normrnd(0,1);
-end
+if param.globalNoise
+    correlatedNoise.global(1) = 0;
+    for volume = 2:param.numVols
+      correlatedNoise.global(volume) = correlatedNoise.global(volume-1) - param.theta*correlatedNoise.global(volume-1) + normrnd(0,1);
+    end
+elseif param.globalNoise == 0; 
+    correlatedNoise.global(1:param.numVols) = 0; 
+end;
 
-if param.correlatedNoise == 0; correlatedNoise.global(1:param.sweeps*param.volumes+param.p.canonical.lengthInSeconds) = 0; end;
 
+%% correlated indivudual voxel noise %%
+rfOverlapTrue = getTrueOverlap(vox,numVoxels);
+rfOverlapTrue = rfOverlapTrue.*rfOverlapTrue; % fuck it, let's square this for now so it's not linear
 
+param.tau = abs(normrnd(param.varAvg,param.varStd,numVoxels,1));
+stdMatrix = param.tau * param.tau';
+
+covarMatrix = param.rho * (stdMatrix .* rfOverlapTrue);
+varMatrix = (1-param.rho) * (stdMatrix .* rfOverlapTrue .* eye(numVoxels));
+varCovarMatrix = covarMatrix + varMatrix;
+
+keyboard
+
+%% generate the noise %%
+correlatedNoise.individual = mvnrnd(zeros(1,numVoxels), varCovarMatrix, param.numVols)
 
 
 %%%%%%%%%%%%%%%%
@@ -174,17 +192,17 @@ function vox = synthRF(vox,voxel,param,rfType)
 %% Make the receptive field %%
 % Gaussian receptive field %
 if strcmp(rfType,'gaussian')
-    x = round(param.fieldSize*(.1)) + round((param.fieldSize*(.8)).*rand);
-    y = round(param.fieldSize*(.1)) + round((param.fieldSize*(.8)).*rand);
-    sx = round(param.fieldSize*(.05)) + round((param.fieldSize*(.2)).*rand); sy=sx;
+    x = param.fieldSize*(.1) + (param.fieldSize*(.8)).*rand;
+    y = param.fieldSize*(.1) + (param.fieldSize*(.8)).*rand;
+    sx = param.fieldSize*(.05) + (param.fieldSize*(.2)).*rand; sy=sx;
     gaussian1 = normpdf([1:param.fieldSize],x,sx);
     gaussian2 = normpdf(transpose([1:param.fieldSize]),y,sy);
     rf = gaussian2*gaussian1;
 % Difference of Gaussians Receptive Field %
 elseif strcmp(rfType,'gaussianDiff')
-    x = round(param.fieldSize*(.1)) + round((param.fieldSize*(.8)).*rand);
-    y = round(param.fieldSize*(.1)) + round((param.fieldSize*(.8)).*rand);
-    sx = round(param.fieldSize*(.05)) + round((param.fieldSize*(.15)).*rand); sy=sx; sx2 = param.DoGsize*sx; sy2 = param.DoGsize*sy;
+    x = param.fieldSize*(.1) + (param.fieldSize*(.8)).*rand;
+    y = param.fieldSize*(.1) + (param.fieldSize*(.8)).*rand;
+    sx = param.fieldSize*(.05) + (param.fieldSize*(.15)).*rand; sy=sx; sx2 = param.DoGsize*sx; sy2 = param.DoGsize*sy;
     gaussian1 = normpdf([1:param.fieldSize],x,sx);
     gaussian2 = normpdf(transpose([1:param.fieldSize]),y,sy);
     gaussianDiff1 = normpdf([1:param.fieldSize],x,sx2);
@@ -217,13 +235,16 @@ hrf = getCanonicalHRF(param.p.canonical,fitparam.framePeriod);
 tseries = getModelTSeries(stimMovie,vox{voxel}.OGrf,param,hrf);
 
 
-%% add  noise to time series %%
-if param.gaussianNoise
+%% add noise to time series %%
+if param.gaussianIndNoise
     tseries = tseries + normrnd(0,1,[1 length(tseries)])*std(tseries)/param.gaussNoiseMag; %gaussian noise
 end
 
-noisytSeries = tseries + correlatedNoise.global*std(tseries)/param.globalNoiseMag;
+if param.gaussianCorrelatedNoise
+    tempseries = tseries+transpose(correlatedNoise.individual(:,voxel));
+end
 
+noisytSeries = tempseries + correlatedNoise.global*std(tseries)/param.globalNoiseMag;
 
 
 %% recover time series from noisytSeries %%
@@ -358,6 +379,34 @@ end
 
 
 
+%%%%%%%%%%%%%%%%%%%%%
+%% getTrueOverlap %%
+%%%%%%%%%%%%%%%%%%%%
+function rfOverlapTrue = getTrueOverlap(vox,numVoxels)
+
+rfOverlap = zeros(numVoxels);
+for row = 1:numVoxels
+    for column = 1:numVoxels
+        mu1 = 0; s1 = vox{row}.OGparams(3); s2 = vox{column}.OGparams(3);
+        mu2 = sqrt((vox{row}.OGparams(1)-vox{column}.OGparams(1))^2 + (vox{row}.OGparams(2)-vox{column}.OGparams(2))^2);
+        if mu1 == mu2 & s1 == s2; 
+            rfOverlap(row,column) = 1;
+        else;
+            c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
+            rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end
+    end
+end
+
+rfOverlapTrue = 0.5 * (rfOverlap + rfOverlap');
+
+%n = size(rfOverlap,1);
+%cvx_begin
+%variable rfOverlapTrue(n,n)
+%minimize(norm(rfOverlapTrue-rfOverlap,'fro'))
+%rfOverlapTrue -m *eye(n) == semidefinite(n)
+%cvx_end
+
+
 function showSynthVoxels
 figure;hold on;
 scatter(1:length(vox{v}.noisyTrueSeries),vox{v}.noisyTrueSeries);
@@ -365,3 +414,10 @@ plot(1:length(vox{v}.recoveredSeries),vox{v}.recoveredSeries);
 plot(1:length(vox{v}.recoveredSeries),vox{v}.trueSeries,'black')
 
 
+%% convex semi-definite program solution to make varCovar positive semidefinite %%
+%n = size(vcMatrix,1);
+%cvx_begin
+%variable varCovarMatrix(n,n)
+%minimize(norm(varCovarMatrix-vcMatrix,'fro'))
+%(varCovarMatrix -0*eye(n)) == semidefinite(n)
+%cvx_end
