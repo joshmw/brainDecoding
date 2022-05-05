@@ -7,25 +7,33 @@
 % recovered params and time series--into a data structure. Plots the relationship between receptive field overlap and noise correlation (from the fit
 % receptive fields). 
 %
-%
 % Pipeline:
 %   1. Generate random pRF parameters.
 %   2. Synthesize true time series from encoding model (specified in input).
 %       Convolve stimulus overlap time series (rf .* stimMovie) with hdr.
-%   3. Add gaussian noise to each time point in the time series. 
+%   3. Add noise to each time point in the time series. 
+%       Can add both global noise as well as correlated gaussian noise between voxels.
 %   4. Fit a simple gaussian receptive field to the noisy true time series by minimizing squared residual error.
 %       You can add other receptive field models to synthesize or decode.
 %   5. Plot relationship between receptive field overlap (recovered) and noise correlation between voxels.
 %
 % Things you can specify:
-%   params:
+%   Visual field:
 %       fieldSize: Size of the receptive field (pixels). True RF parameters are generated based on this size.
 %       volumes: How fast the stimulus travels (time for full sweep across RF). For this and hdr, I'm thinking in seconds.
 %       sweeps: Numer of stimulus sweeps across RF. Should be minimum 10 (bars sweep randomly horizontal/vertical in forward/reverse).
-%   gaussNoiseMag: Amount of gaussian noise you add to the true time series. Lower = more.
-%   negDoGFactor: For DoG encoding model, divide the surround RF by this value before subtracting.
-%   DoGsize: Size of surround DoG receptive field relative to center.
-%   rectify: If 1, will perform ReLU on DoG RF. If 0, won't.
+%   Noise:
+%       param.globalNoise: 1 if you want to add global Orenstein-Uhlenbeck noise (brownian motion with return to 0).
+%           param.globalNoiseMag: std of time-correlated global noise.
+%           param.theta: 0-1 OU process parameter; strength of pull back to 0 at each time point of brownian motion (set 1 = plain gaussian noise; set 0 = brownian motion).
+%       param.gaussianNoise: 1 to add gaussian noise to individual voxels.
+%           param.varStd/param.varAvg: mean/std of additive gaussian noise.
+%           param.rho: Covariance of noise by receptive field overlap (0-1). 0 = no covariance (only variance). 1 = full covariance (currently broken).
+%   Alternate model recovery:
+%       negDoGFactor: For DoG encoding model, divide the surround RF by this value before subtracting.
+%       DoGsize: Size of surround DoG receptive field relative to center.
+%   Random:
+%       rectify: If 1, will perform ReLU on DoG RF. If 0, won't.
 %
 %
 % Usage:
@@ -44,17 +52,13 @@ param.volumes = 20;
 param.sweeps = 10;
 
 param.globalNoise = 1; %1 to add correlated noise to all time series
-param.gaussianCorrelatedNoise = 1; %1 to add random gaussian noise correlated between voxels
-param.gaussianIndNoise = 0; %1 to add random gaussian noise to independent time series
-
+param.globalNoiseMag = .05;
 param.theta = .2; %strength at which global noise returns to 0
-param.rho = 0.2; %gaussian noise individual covariance (1 = dependent)
-param.varStd = .05; %std of individual voxel variance
-param.varAvg = .03; %mean of individual voxel variance
 
-
-param.gaussNoiseMag = 3; %divide std of tseries by param.gaussNoiseMag to generate gaussian noise: lower = more noise
-param.globalNoiseMag = 15;
+param.gaussianNoise = 1;
+param.varStd = .005; %std of individual voxel variance
+param.varAvg = .05; %mean of individual voxel variance
+param.rho = 0; %gaussian noise individual covariance (1 = dependent)
 
 param.negDoGFactor = 2; %magnitude of the negative difference of gaussian factor
 param.DoGsize = 2; %size of the inhibitory gaussian receptive field relative to excitatory (std)
@@ -62,7 +66,6 @@ param.rectify = 1; %relu rectification for negative receptive field pixels
 
 param.horizontal = round(rand(1,param.sweeps)); 
 param.reverse = round(rand(1,param.sweeps)); 
-param.rfSynthType = rfType;
 vox = [];
 param.p.canonical.type = 'gamma';
 param.p.canonical.lengthInSeconds = 20;
@@ -71,6 +74,8 @@ param.p.canonical.tau = .6;
 param.p.canonical.exponent = 6;
 param.p.canonical.offset = 0;
 param.numVols = param.sweeps*param.volumes+param.p.canonical.lengthInSeconds;
+param.rfSynthType = rfType;
+
 
 
 
@@ -135,7 +140,7 @@ for bin = 0:step:40
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',8);
-title('V1 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
+title('Receptive Field Overlap and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j'); ylabel('Noise correlation between voxels i,j');
 
 
 
@@ -159,7 +164,7 @@ function [correlatedNoise param] = correlateNoise(param,vox,numVoxels)
 if param.globalNoise
     correlatedNoise.global(1) = 0;
     for volume = 2:param.numVols
-      correlatedNoise.global(volume) = correlatedNoise.global(volume-1) - param.theta*correlatedNoise.global(volume-1) + normrnd(0,1);
+      correlatedNoise.global(volume) = correlatedNoise.global(volume-1) - param.theta*correlatedNoise.global(volume-1) + normrnd(0,param.globalNoiseMag);
     end
 elseif param.globalNoise == 0; 
     correlatedNoise.global(1:param.numVols) = 0; 
@@ -177,7 +182,6 @@ covarMatrix = param.rho * (stdMatrix .* rfOverlapTrue);
 varMatrix = (1-param.rho) * (stdMatrix .* rfOverlapTrue .* eye(numVoxels));
 varCovarMatrix = covarMatrix + varMatrix;
 
-keyboard
 
 %% generate the noise %%
 correlatedNoise.individual = mvnrnd(zeros(1,numVoxels), varCovarMatrix, param.numVols)
@@ -226,37 +230,33 @@ vox{voxel}.rfType = rfType;
 %%%%%%%%%%%%%%%
 function vox = recoverRF(vox,voxel,param,stimMovie,correlatedNoise)
 
-%% set parameters %%
-fitparam.framePeriod = 1; %seconds
-
-
-%% signal time series %%
-hrf = getCanonicalHRF(param.p.canonical,fitparam.framePeriod);
+%% get signal time series %%
+hrf = getCanonicalHRF(param.p.canonical,1);
 tseries = getModelTSeries(stimMovie,vox{voxel}.OGrf,param,hrf);
 
 
-%% add noise to time series %%
-if param.gaussianIndNoise
-    tseries = tseries + normrnd(0,1,[1 length(tseries)])*std(tseries)/param.gaussNoiseMag; %gaussian noise
-end
-
-if param.gaussianCorrelatedNoise
-    tempseries = tseries+transpose(correlatedNoise.individual(:,voxel));
-end
-
-noisytSeries = tempseries + correlatedNoise.global*std(tseries)/param.globalNoiseMag;
+%% add the gaussian noise, correlated by rho %%
+if param.gaussianNoise; tempseries = tseries+transpose(correlatedNoise.individual(:,voxel)); end;
 
 
-%% recover time series from noisytSeries %%
+%% add the global noise %%
+noisytSeries = tempseries + correlatedNoise.global*std(tseries);
+
+
+%% fit RF params to noisytSeries %%
 startparams(1) = param.fieldSize/2; startparams(2) = param.fieldSize/2; startparams(3) = param.fieldSize/10; %start in center with param.fieldSize/10 std
-minsearch = [0 0 param.fieldSize/50]; maxsearch = [param.fieldSize param.fieldSize inf]; opts = optimset('display','off'); %constrain search to visual field and >.5 std
+
+minsearch = [param.fieldSize/20 param.fieldSize/20 param.fieldSize/50]; maxsearch = [param.fieldSize*19/20 param.fieldSize*19/20 param.fieldSize]; opts = optimset('display','off'); %constrain search to visual field and >.5 std
 
 [params] = lsqnonlin(@getModelResidual,startparams,minsearch,maxsearch,opts,noisytSeries,hrf,stimMovie,param);
 
+
+%% draw the recovered receptive field %%
 recgaussian1 = normpdf([1:param.fieldSize],params(1),params(3));
 recgaussian2 = normpdf(transpose([1:param.fieldSize]),params(2),params(3));
-recrf = recgaussian2*recgaussian1;
+recrf = recgaussian2*recgaussian1; %recovers a simple gaussian RF
 rectSeries = getModelTSeries(stimMovie,recrf,param,hrf);
+param.rfRecoveryType = 'gaussian';
 
 
 %% grab things to return %%
@@ -274,10 +274,12 @@ vox{voxel}.noiseSeries = noisytSeries-rectSeries;
 %% getModelResidual %%
 %%%%%%%%%%%%%%%%%%%%%%
 function residual = getModelResidual(params,noisytSeries,hrf,stimMovie,param)
+
+%% make the receptive field from params you are fitting%%
 x = params(1); y = params(2); sx = params(3); sy = sx;
 gaussian1 = normpdf([1:param.fieldSize],x,sx);
 gaussian2 = normpdf(transpose([1:param.fieldSize]),y,sy);
-rf = gaussian2*gaussian1;
+rf = gaussian2*gaussian1; %currently just recovers a gaussian
 
 
 %% signal time series %%
