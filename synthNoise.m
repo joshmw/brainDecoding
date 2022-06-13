@@ -1,38 +1,20 @@
 %% synthNoise.m %%
 %
 %       By: Josh Wilson
-%       Created: April 2022
+%       Created: June 2022
 %
 % Pipeline:
-%   1. Generate random pRF parameters.
-%   2. Synthesize true time series from encoding model (specified in input).
-%   3. Add noise to synthesized time series
-%   4. Fit a simple gaussian receptive field to the noisy true time series by minimizing squared residual error.
-%       You can add other receptive field models to synthesize or decode.
-%   5. Plot relationship between receptive field overlap (recovered) and noise correlation between voxels.
+%   First part does the same thing as synthCor.m - creates receptive fields and time series, recovers, etc.
 %
-% Things you can specify:
-%   Visual field:
-%       fieldSize: Size of the receptive field (pixels). True RF parameters are generated based on this size.
-%       volumes: How fast the stimulus travels (time for full sweep across RF). For this and hdr, I'm thinking in seconds.
-%       sweeps: Numer of stimulus sweeps across RF. Should be minimum ~10 (bars sweep randomly horizontal/vertical in forward/reverse).
-%   Noise:
-%       param.gaussianNoise: 1 to add gaussian noise to individual voxels.
-%           param.varStd/param.varAvg: mean/std of additive gaussian noise.
-%           param.rho: Covariance of noise by receptive field overlap (0-1). 0 = no covariance, 1 = full covariance (same noise on every voxel).
-%           param.sigma: Amount of correlated noise on overlapping receptive fields. Min 0, no max.
-%   Alternate model recovery:
-%       negDoGFactor: For DoG encoding model, divide the surround RF by this value before subtracting.
-%       DoGsize: Size of surround DoG receptive field relative to center.
-%   Random:
-%       rectify: If 1, will perform ReLU on DoG RF. If 0, won't.
+%   After that, creates several more time series for each voxel from the same ground truth parameters
+%   (can specify number of extra scans with param.numScans). Then, averages those scans together to use 
+%   as a mean model of voxel activity. Subtracts the mean model from each voxels and shows you the noise
+%   characteristics (which you can set the same way you would in synthCor). The interesting part is adding
+%   multiplicative noise (param.multi). 
 %
-%
-% Usage:
-%   synthCor(numVoxels,encodingModel,decodingModel)
 %
 %   Example:
-%       [vox param rfOverlapRec noiseCor correlatedNoise stimMovie] = synthCor(100,'gaussianDiff','gaussian');
+%       [vox param rfOverlapRec noiseCor correlatedNoise stimMovie] = synthNoise(100,'gaussian','gaussian');
 
 
 function [vox param rfOverlapRec noiseCor correlatedNoise, stimMovie] = synthCor(numVoxels,synthRFType,recRFType);
@@ -64,7 +46,6 @@ param.thetaT = .2;
 param.rectify = 0; %relu for negative RF values
 param.DoGsize = 2;
 param.negDoGFactor = 2;
-
 
 param.horizontal = round(rand(1,param.sweeps)); 
 param.reverse = round(rand(1,param.sweeps)); 
@@ -147,8 +128,6 @@ title('Simulated Receptive Field and Noise Correlations'); xlabel('Receptive fie
 
 drawPublishAxis('labelFontSize=14');
 leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.6 0.2 0.2685 0.1003];
-
-
 
 
 %% make the extra time series %%
