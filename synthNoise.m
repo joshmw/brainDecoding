@@ -24,7 +24,7 @@ function [vox param rfOverlapRec noiseCor correlatedNoise, stimMovie] = synthCor
 param.fieldSize = 80; 
 param.volumes = 20; 
 param.sweeps = 10;
-param.numScans = 3;
+param.numScans = 5;
 
 param.gaussianNoise = 1;
 param.varAvg = .1; %mean of individual voxel variance
@@ -117,18 +117,6 @@ NoiseCorArr(rfOverlapArr == 1) = []; rfOverlapArr(rfOverlapArr == 1) = [];
 NoiseCorArr(isnan(rfOverlapArr)) = []; rfOverlapArr(isnan(rfOverlapArr)) = [];
 rfOverlapArr(isnan(NoiseCorArr)) = []; NoiseCorArr(isnan(NoiseCorArr)) = [];
 
-figure; hold on; scatter(rfOverlapArr,NoiseCorArr,1,'filled','k');
-
-expFit = fit(rfOverlapArr',NoiseCorArr','exp1');
-GexpFit = plot(expFit,'predobs'); for i = 1:3, GexpFit(i).Color = [0, 0.4470, 0.7410]; GexpFit(i).LineWidth = 2; end
-for i = 2:3, GexpFit(i).LineStyle = '--'; GexpFit(i).LineWidth = .75; end
-
-legend('','Linear Fit', 'Exponential Fit');
-title('Simulated Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
-
-drawPublishAxis('labelFontSize=14');
-leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.6 0.2 0.2685 0.1003];
-
 
 %% make the extra time series %%
 for scan = 1:param.numScans
@@ -158,16 +146,65 @@ end
 
 %% plot the noise %%
 groupsize = param.numScans;
+trueSeries = []; avg = []; modelSeries = [];
 for group = 1:numVoxels;
     avgseries = zeros(1,length(vox{1}.trueSeries));
-    for i = 1:groupsize, avgseries = avgseries+vox{group}.dupeScans{scan}.noisyTrueSeries;end
+    for scan = 1:groupsize, avgseries = avgseries+vox{group}.dupeScans{scan}.noisyTrueSeries;end
 avgseries = avgseries/groupsize; vox{group}.avgSeries = avgseries;
 
-figure(2),hold on,scatter(vox{group}.trueSeries,vox{group}.noisyTrueSeries-avgseries,1,'filled','k'); xlabel('model time series % signal'),ylabel('residual (true - avg)');
-figure(3),hold on,scatter(zscore(vox{group}.noisyTrueSeries),zscore(vox{group}.noisyTrueSeries-avgseries),1,'filled','k'); xlabel('true time series % signal'); ylabel('residual (true - avg');
-figure(4),hold on,scatter(zscore(avgseries),zscore(vox{group}.noisyTrueSeries-avgseries),1,'filled','k'); xlabel('avg time series % signal'); ylabel('residual (true - avg');
-%figure,hist(vox{1}.noisyTrueSeries-avgseries);
-    end
+avg = [avg zscore(avgseries)];
+trueSeries = [trueSeries zscore(vox{group}.noisyTrueSeries)];
+modelSeries = [modelSeries zscore(vox{group}.trueSeries)];
+end
+
+figure,scatter(modelSeries,trueSeries-avg,1,'filled','k'); xlabel('model time series % signal'),ylabel('residual (true - avg)'); title('Residuals by pRF predictions')
+figure,scatter(trueSeries,trueSeries-avg,1,'filled','k'); xlabel('true time series % signal'); ylabel('residual (true - avg)'); title('Residuals by time series activity')
+figure,scatter(avg,trueSeries-avg,1,'filled','k'); xlabel('avg time series % signal'); ylabel('residual (true - avg)'); title('Residuals by mean model prediction')
+
+keyboard
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% fit gaussian mixture model %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+figure,scatter(trueSeries,avg,1,'filled','k'); xlabel('True time series % signal'); ylabel('avg'); title('Single scan and average activity'); hold on;
+
+numK = 20
+options = statset('MaxIter',2500);
+for k = 1:numK;
+    Mu(k,1) = -1+k/5;
+    Mu(k,2) = Mu(k,1);
+end
+data = [trueSeries',avg'];
+
+gm = fitgmdist(data,numK,'Options',options,'Start','randSample');
+
+sizes = rescale(gm.ComponentProportion,min(gm.ComponentProportion)/max(gm.ComponentProportion)*150, 150);
+
+scatter(gm.mu(:,1),gm.mu(:,2),sizes,'r','filled'),
+plot([min(gm.mu(:,1)),max(gm.mu(:,1))],[min(gm.mu(:,2)),max(gm.mu(:,2))],'r','LineWidth',.1)
+
+
+keyboard
+
+x1 = -2:0.1:3;
+x2 = -2:0.1:3;
+[X1,X2] = meshgrid(x1,x2);
+
+totalProb = zeros(length(X1(:)),1);
+
+for comp = 1:numK,
+z = mvnpdf([X1(:), X2(:)],gm.mu(comp,:),gm.Sigma(:,:,comp));
+totalProb = totalProb+z;
+end
+
+figure,scatter3(X1(:),X2(:),totalProb,'filled')
+xlabel('x')
+ylabel('y')
+
+keyboard
 
 
 %%%%%%%%%%%%%%%%%%%
