@@ -24,14 +24,15 @@ function [vox param rfOverlapRec noiseCor correlatedNoise, stimMovie] = synthCor
 param.fieldSize = 80; 
 param.volumes = 20; 
 param.sweeps = 10;
-param.numScans = 5;
+param.numScans = 3;
 
 param.gaussianNoise = 1;
 param.varAvg = .1; %mean of individual voxel variance
 param.varStd = param.varAvg/10; %std of individual voxel variance
 param.rho = 0; %global covariance
 param.sigma = 0; %channel dependent noise contribution
-param.multi = 1; %set 1 for multiplicative (squared) noise
+param.multi = 1; %set 1 for multiplicative noise
+param.multiDegree = .2; % exponent for multiplicative noise
 
 param.globalNoise = 0; %1 to add correlated noise to all time series
 param.globalNoiseMag = .03;
@@ -86,37 +87,6 @@ for voxel = 1:numVoxels
 end
 
 
-%% Receptive field Overlap %%
-rfOverlapRec = zeros(numVoxels);
-for row = 1:numVoxels
-    for column = 1:numVoxels
-        mu1 = 0; s1 = vox{row}.Rparams(3); s2 = vox{column}.Rparams(3);
-        mu2 = sqrt((vox{row}.Rparams(1)-vox{column}.Rparams(1))^2 + (vox{row}.Rparams(2)-vox{column}.Rparams(2))^2);
-        if mu1 == mu2 & s1 == s2; 
-            rfOverlapRec(row,column) = 1;
-        else;
-            c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
-            rfOverlapRec(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end
-    end
-end
-        
-%% Noise Correlation %%
-for row = 1:numVoxels
-    for column = 1:numVoxels
-        noiseCor(row,column) = corr2(vox{row}.noiseSeries,vox{column}.noiseSeries);
-    end
-end
-
-
-%% plot %%
-rfOverlapArr = reshape(rfOverlapRec,[1 length(rfOverlapRec)^2]); NoiseCorArr = reshape(noiseCor,[1 length(noiseCor)^2]);
-[rfOverlapArr,sortOrder] = sort(rfOverlapArr); NoiseCorArr = NoiseCorArr(sortOrder);
-
-NoiseCorArr(rfOverlapArr == 1) = []; rfOverlapArr(rfOverlapArr == 1) = [];
-
-NoiseCorArr(isnan(rfOverlapArr)) = []; rfOverlapArr(isnan(rfOverlapArr)) = [];
-rfOverlapArr(isnan(NoiseCorArr)) = []; NoiseCorArr(isnan(NoiseCorArr)) = [];
-
 
 %% make the extra time series %%
 for scan = 1:param.numScans
@@ -127,7 +97,7 @@ for scan = 1:param.numScans
         if param.gaussianNoise;
         if param.multi %multiplicative noise
             tempnoise = transpose(correlatedNoise.individual(:,voxel));
-            noise = tempnoise.*(tseries/max(tseries)+1).*(tseries/max(tseries)+1);
+            noise = tempnoise.*((tseries/max(tseries)+1).^param.multiDegree);
             noise = noise/(std(noise)/std(tempnoise)); %standardize
             tempseries = tseries+noise;
         else
@@ -157,21 +127,19 @@ trueSeries = [trueSeries zscore(vox{group}.noisyTrueSeries)];
 modelSeries = [modelSeries zscore(vox{group}.trueSeries)];
 end
 
-figure,scatter(modelSeries,trueSeries-avg,1,'filled','k'); xlabel('model time series % signal'),ylabel('residual (true - avg)'); title('Residuals by pRF predictions')
-figure,scatter(trueSeries,trueSeries-avg,1,'filled','k'); xlabel('true time series % signal'); ylabel('residual (true - avg)'); title('Residuals by time series activity')
-figure,scatter(avg,trueSeries-avg,1,'filled','k'); xlabel('avg time series % signal'); ylabel('residual (true - avg)'); title('Residuals by mean model prediction')
-
-keyboard
-
-
+%figure,scatter(modelSeries,trueSeries-avg,1,'filled','k'); xlabel('model time series % signal'),ylabel('residual (true - avg)'); title('Residuals by pRF predictions')
+%figure,scatter(trueSeries,trueSeries-avg,1,'filled','k'); xlabel('true time series % signal'); ylabel('residual (true - avg)'); title('Residuals by time series activity')
+%figure,scatter(avg,trueSeries-avg,1,'filled','k'); xlabel('avg time series % signal'); ylabel('residual (true - avg)'); title('Residuals by mean model prediction')
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% fit gaussian mixture model %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% plot data %
 figure,scatter(trueSeries,avg,1,'filled','k'); xlabel('True time series % signal'); ylabel('avg'); title('Single scan and average activity'); hold on;
 
-numK = 20
+% fit model %
+numK = 8
 options = statset('MaxIter',2500);
 for k = 1:numK;
     Mu(k,1) = -1+k/5;
@@ -179,15 +147,20 @@ for k = 1:numK;
 end
 data = [trueSeries',avg'];
 
-gm = fitgmdist(data,numK,'Options',options,'Start','randSample');
+gm = fitgmdist(data,numK,'Options',options,'Start','randSample','CovarianceType','diagonal');
 
+% plot model %
 sizes = rescale(gm.ComponentProportion,min(gm.ComponentProportion)/max(gm.ComponentProportion)*150, 150);
-
 scatter(gm.mu(:,1),gm.mu(:,2),sizes,'r','filled'),
-plot([min(gm.mu(:,1)),max(gm.mu(:,1))],[min(gm.mu(:,2)),max(gm.mu(:,2))],'r','LineWidth',.1)
+plot([-1 3],[-1 3],'r','LineWidth',.1)
 
+figure,scatter3(gm.mu(:,1),gm.mu(:,2),gm.Sigma(1,1,:),'filled','c')
+hold on,scatter3(gm.mu(:,1),gm.mu(:,2),gm.Sigma(1,2,:),'filled','r')
+xlabel('Component Mu (Single Scan) (Z scores)'); ylabel('Component Mu (Avg Scans) (Z scores)'),zlabel('Std (Z scores)')
+legend('Single Scan std','Average Scan std');title('Gaussian Component Width by Center')
 
 keyboard
+
 
 x1 = -2:0.1:3;
 x2 = -2:0.1:3;
@@ -205,6 +178,9 @@ xlabel('x')
 ylabel('y')
 
 keyboard
+
+
+
 
 
 %%%%%%%%%%%%%%%%%%%
@@ -326,7 +302,7 @@ if param.gaussianNoise;
  
     if param.multi %multiplicative noise
     tempnoise = transpose(correlatedNoise.individual(:,voxel));
-    noise = tempnoise.*(tseries/max(tseries)+1).*(tseries/max(tseries)+1);
+    noise = tempnoise.*((tseries/max(tseries)+1).^param.multiDegree);
     noise = noise/(std(noise)/std(tempnoise)); %
     tempseries = tseries+noise;
     else
@@ -352,6 +328,7 @@ startparams(1) = param.fieldSize/2; startparams(2) = param.fieldSize/2; startpar
 
 minsearch = [param.fieldSize/20 param.fieldSize/20 param.fieldSize/50]; maxsearch = [param.fieldSize*19/20 param.fieldSize*19/20 param.fieldSize]; opts = optimset('display','off'); %constrain search to visual field and >.5 std
 
+recover = 0; if recover
 [params] = lsqnonlin(@getModelResidual,startparams,minsearch,maxsearch,opts,noisytSeries,hrf,stimMovie,param);
 
 
@@ -374,16 +351,16 @@ elseif strcmp(param.rfRecType,'gaussianDiff');
         recrf(recrf<0) = 0;
     end
 end
-
+end
 %% grab things to return %%
 vox{voxel}.hrf = hrf;
-vox{voxel}.Rparams = params;
-vox{voxel}.Rrf = recrf;
+%vox{voxel}.Rparams = params;
+%vox{voxel}.Rrf = recrf;
 vox{voxel}.trueSeries = tseries;
 vox{voxel}.noisyTrueSeries = noisytSeries;
-vox{voxel}.recoveredSeries = rectSeries;
-vox{voxel}.noiseSeries = noisytSeries-rectSeries;
-vox{voxel}.ntseries = ntseries;
+%vox{voxel}.recoveredSeries = rectSeries;
+%vox{voxel}.noiseSeries = noisytSeries-rectSeries;
+%vox{voxel}.ntseries = ntseries;
 
 %param.p.canonical.timelag = 3;
 %hrf = getCanonicalHRF(param.p.canonical,1);
