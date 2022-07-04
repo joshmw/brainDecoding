@@ -17,21 +17,23 @@
 %       [vox param rfOverlapRec noiseCor correlatedNoise stimMovie] = synthNoise(100,'gaussian','gaussian');
 
 
-function [vox param rfOverlapRec noiseCor correlatedNoise, stimMovie] = synthCor(numVoxels,synthRFType,recRFType);
+function [vox param rfOverlapRec noiseCor correlatedNoise, stimMovie] = synthCor(synthRFType,varargin);
+
+getArgs(varargin);
 
 
 %% Set parameters %%
 param.fieldSize = 80; 
 param.volumes = 20; 
 param.sweeps = 10;
-param.numScans = 3;
+%param.numScans = 3;
 
 param.gaussianNoise = 1;
 param.varAvg = .1; %mean of individual voxel variance
 param.varStd = param.varAvg/10; %std of individual voxel variance
 param.rho = 0; %global covariance
 param.sigma = 0; %channel dependent noise contribution
-param.multi = 1; %set 1 for multiplicative noise
+param.multi = 0; %set 1 for multiplicative noise
 param.multiDegree = .2; % exponent for multiplicative noise
 
 param.globalNoise = 0; %1 to add correlated noise to all time series
@@ -59,7 +61,12 @@ param.p.canonical.exponent = 6;
 param.p.canonical.offset = 0;
 param.numVols = param.sweeps*param.volumes+param.p.canonical.lengthInSeconds;
 param.rfSynthType = synthRFType;
-param.rfRecType = recRFType;
+%param.rfRecType = recRFType;
+
+getArgs(varargin);
+param.numScans = numScans;
+param.multi = multi;
+param.multiDegree = degree;
 
 
 
@@ -116,66 +123,39 @@ end
 
 %% plot the noise %%
 groupsize = param.numScans;
-trueSeries = []; avg = []; modelSeries = [];
+noisyTrueSeries = []; avg = []; modelSeries = [];
 for group = 1:numVoxels;
     avgseries = zeros(1,length(vox{1}.trueSeries));
     for scan = 1:groupsize, avgseries = avgseries+vox{group}.dupeScans{scan}.noisyTrueSeries;end
 avgseries = avgseries/groupsize; vox{group}.avgSeries = avgseries;
 
 avg = [avg zscore(avgseries)];
-trueSeries = [trueSeries zscore(vox{group}.noisyTrueSeries)];
+noisyTrueSeries = [noisyTrueSeries zscore(vox{group}.noisyTrueSeries)];
 modelSeries = [modelSeries zscore(vox{group}.trueSeries)];
+residuals = noisyTrueSeries-avg;
 end
 
-%figure,scatter(modelSeries,trueSeries-avg,1,'filled','k'); xlabel('model time series % signal'),ylabel('residual (true - avg)'); title('Residuals by pRF predictions')
-%figure,scatter(trueSeries,trueSeries-avg,1,'filled','k'); xlabel('true time series % signal'); ylabel('residual (true - avg)'); title('Residuals by time series activity')
-%figure,scatter(avg,trueSeries-avg,1,'filled','k'); xlabel('avg time series % signal'); ylabel('residual (true - avg)'); title('Residuals by mean model prediction')
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% fit gaussian mixture model %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% plot data %
-figure,scatter(trueSeries,avg,1,'filled','k'); xlabel('True time series % signal'); ylabel('avg'); title('Single scan and average activity'); hold on;
-
-% fit model %
-numK = 8
-options = statset('MaxIter',2500);
-for k = 1:numK;
-    Mu(k,1) = -1+k/5;
-    Mu(k,2) = Mu(k,1);
-end
-data = [trueSeries',avg'];
-
-gm = fitgmdist(data,numK,'Options',options,'Start','randSample','CovarianceType','diagonal');
-
-% plot model %
-sizes = rescale(gm.ComponentProportion,min(gm.ComponentProportion)/max(gm.ComponentProportion)*150, 150);
-scatter(gm.mu(:,1),gm.mu(:,2),sizes,'r','filled'),
-plot([-1 3],[-1 3],'r','LineWidth',.1)
-
-figure,scatter3(gm.mu(:,1),gm.mu(:,2),gm.Sigma(1,1,:),'filled','c')
-hold on,scatter3(gm.mu(:,1),gm.mu(:,2),gm.Sigma(1,2,:),'filled','r')
-xlabel('Component Mu (Single Scan) (Z scores)'); ylabel('Component Mu (Avg Scans) (Z scores)'),zlabel('Std (Z scores)')
-legend('Single Scan std','Average Scan std');title('Gaussian Component Width by Center')
+figure,subplot(2,2,1),scatter(modelSeries,noisyTrueSeries-avg,1,'filled','k'); xlabel('model time series % signal'),ylabel('residual (true - avg)'); title('Residuals by pRF predictions')
+subplot(2,2,2),scatter(noisyTrueSeries,noisyTrueSeries-avg,1,'filled','k'); xlabel('true time series % signal'); ylabel('residual (true - avg)'); title('Residuals by time series activity')
+subplot(2,2,3),scatter(avg,noisyTrueSeries-avg,1,'filled','k'); xlabel('avg time series % signal'); ylabel('residual (true - avg)'); title('Residuals by mean model prediction')
+subplot(2,2,4),scatter(noisyTrueSeries,avg,1,'filled','k'); xlabel('Single Scan % signal'); ylabel('Avg % signal'); title('Single scan and average activity'); hold on;
 
 keyboard
 
+startparams(1) = 0; startparams(2) = 1;
 
-x1 = -2:0.1:3;
-x2 = -2:0.1:3;
-[X1,X2] = meshgrid(x1,x2);
+minsearch = [-1 -inf]; maxsearch = [1 inf]; opts = optimset('display','off');
 
-totalProb = zeros(length(X1(:)),1);
+[params] = lsqnonlin(@fitNoiseParameters,startparams,minsearch,maxsearch,opts,residuals,numScans)
 
-for comp = 1:numK,
-z = mvnpdf([X1(:), X2(:)],gm.mu(comp,:),gm.Sigma(:,:,comp));
-totalProb = totalProb+z;
-end
 
-figure,scatter3(X1(:),X2(:),totalProb,'filled')
-xlabel('x')
-ylabel('y')
+
+
+
+
+
+
+
 
 keyboard
 
@@ -188,7 +168,13 @@ keyboard
 %%%%%%%%%%%%%%%%%%%
 
 
-
+%%%%%%%%%%%%%%%%%%%%%%%%
+%% fitNoiseParameters %%
+%%%%%%%%%%%%%%%%%%%%%%%%
+function logLikelihood = fitNoiseParameters(params,residuals,numScans)
+mu = params(1); compstd = params(2);
+std = compstd^2+(compstd/sqrt(numScans))^2;
+logLikelihood = sum(log(normpdf(residuals,mu,std)));
 
 
 
