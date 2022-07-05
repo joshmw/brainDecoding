@@ -140,13 +140,12 @@ subplot(2,2,2),scatter(noisyTrueSeries,noisyTrueSeries-avg,1,'filled','k'); xlab
 subplot(2,2,3),scatter(avg,noisyTrueSeries-avg,1,'filled','k'); xlabel('avg time series % signal'); ylabel('residual (true - avg)'); title('Residuals by mean model prediction')
 subplot(2,2,4),scatter(noisyTrueSeries,avg,1,'filled','k'); xlabel('Single Scan % signal'); ylabel('Avg % signal'); title('Single scan and average activity'); hold on;
 
-keyboard
 
-startparams(1) = 0; startparams(2) = 1;
+startparams(1) = 0; startparams(2) = 1; startparams(3) = 1; startparams(4) = 0;
 
-minsearch = [-1 -inf]; maxsearch = [1 inf]; opts = optimset('display','off');
+minsearch = [-1 -inf -inf -inf]; maxsearch = [1 inf inf inf]; opts = optimset('display','off'); opts = optimset('maxIter',2500);
 
-[params] = lsqnonlin(@fitNoiseParameters,startparams,minsearch,maxsearch,opts,residuals,numScans)
+[params, logLikelihood] = lsqnonlin(@fitNoiseParameters,startparams,minsearch,maxsearch,opts,residuals,numScans,avg,noisyTrueSeries)
 
 
 
@@ -171,9 +170,11 @@ keyboard
 %%%%%%%%%%%%%%%%%%%%%%%%
 %% fitNoiseParameters %%
 %%%%%%%%%%%%%%%%%%%%%%%%
-function logLikelihood = fitNoiseParameters(params,residuals,numScans)
-mu = params(1); compstd = params(2);
-std = compstd^2+(compstd/sqrt(numScans))^2;
+function logLikelihood = fitNoiseParameters(params,residuals,numScans,avg,noisyTrueSeries)
+mu = params(1); compstd = params(2); scale = params(3); beta = params(4);
+
+
+std = ((normcdf(noisyTrueSeries)*scale+beta)+compstd).^2+(compstd/sqrt(numScans))^2;
 logLikelihood = sum(log(normpdf(residuals,mu,std)));
 
 
@@ -211,7 +212,7 @@ channelMatrix = param.sigma^2 * (stdMatrix .* rfOverlapTrue);
 
 varCovarMatrix = covarMatrix + varMatrix + channelMatrix;
 
-correlatedNoise.individual = mvnrnd(zeros(1,numVoxels), varCovarMatrix, param.numVols)
+correlatedNoise.individual = mvnrnd(zeros(1,numVoxels), varCovarMatrix, param.numVols);
 
 
 %% individual Ornstein Uhlenbeck noise %%
