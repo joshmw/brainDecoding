@@ -17,7 +17,7 @@
 %       [vox param rfOverlapRec noiseCor correlatedNoise stimMovie] = synthNoise(100,'gaussian','gaussian');
 
 
-function [vox param rfOverlapRec noiseCor correlatedNoise, stimMovie] = synthCor(synthRFType,varargin);
+function [vox param rfOverlapRec noiseCor correlatedNoise, stimMovie] = synthCor(varargin);
 
 getArgs(varargin);
 
@@ -60,18 +60,20 @@ param.p.canonical.tau = .6;
 param.p.canonical.exponent = 6;
 param.p.canonical.offset = 0;
 param.numVols = param.sweeps*param.volumes+param.p.canonical.lengthInSeconds;
-param.rfSynthType = synthRFType;
+param.rfSynthType = 'gaussian';
+param.rfRecType = 'gaussian';
 %param.rfRecType = recRFType;
 
 getArgs(varargin);
 param.numScans = numScans;
 param.multi = multi;
 param.multiDegree = degree;
+param.numVoxels = numVoxels;
 
 
 
 %% Synthesize the receptive fields %%
-for voxel = 1:numVoxels
+for voxel = 1:param.numVoxels
     vox = synthRF(vox,voxel,param);
 end
 
@@ -99,7 +101,8 @@ end
 for scan = 1:param.numScans
     [correlatedNoise, param] = correlateNoise(param,vox,numVoxels);
     for voxel = 1:numVoxels
-        tseries = vox{voxel}.trueSeries;
+        tseries = vox{voxel}.groundTruthTSeries;
+
         %% add the gaussian noise, correlated by rho %%
         if param.gaussianNoise;
         if param.multi %multiplicative noise
@@ -116,49 +119,43 @@ for scan = 1:param.numScans
         else tempseries2 = tempseries; end
 
         %% add the global noise %%
-        vox{voxel}.dupeScans{scan}.noisyTrueSeries  = tempseries2 + correlatedNoise.global*std(tseries);
+        vox{voxel}.dupeScans{scan}.measuredSingleTSeries  = tempseries2 + correlatedNoise.global*std(tseries);
 
     end
 end
 
-%% plot the noise %%
-groupsize = param.numScans;
-noisyTrueSeries = []; avg = []; modelSeries = [];
+%averge the extra scans into 1 average time series, avgTSeriesNScans
+
 for group = 1:numVoxels;
-    avgseries = zeros(1,length(vox{1}.trueSeries));
-    for scan = 1:groupsize, avgseries = avgseries+vox{group}.dupeScans{scan}.noisyTrueSeries;end
-avgseries = avgseries/groupsize; vox{group}.avgSeries = avgseries;
+    avgTSeriesNScans = zeros(1,length(vox{1}.groundTruthTSeries));
+    for scan = 1:param.numScans, avgTSeriesNScans = avgTSeriesNScans+vox{group}.dupeScans{scan}.measuredSingleTSeries;end
+avgTSeriesNScans = avgTSeriesNScans/param.numScans; vox{group}.avgTSeriesNScans = avgTSeriesNScans;end
 
-avg = [avg zscore(avgseries)];
-noisyTrueSeries = [noisyTrueSeries zscore(vox{group}.noisyTrueSeries)];
-modelSeries = [modelSeries zscore(vox{group}.trueSeries)];
-residuals = noisyTrueSeries-avg;
+
+%% fit parameters to the noise %%
+%set nonlinear search starting parameters and options
+startparams(1) = 1; startparams(2) = 0;
+opts = optimset('display','off','maxIter',1000000,'MaxFunEvals',1000000);
+minsearch = [0 -inf]; maxsearch = [inf inf];
+
+
+%search for std of additive noise and scaled component of multiplicative noise for each voxels
+for voxel = 1:param.numVoxels
+[params, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
+    lsqnonlin(@fitNoiseParameters,startparams,minsearch,maxsearch,opts,vox,voxel);
+
+params1{voxel} = params; resnorm1{voxel} = resnorm; residual1{voxel} = residual; exitflag1{voxel} = exitflag; %output1{voxel} = output, lambda1{voxel} = lambda, jacobian{voxel} = jacobian;
 end
-
-figure,subplot(2,2,1),scatter(modelSeries,noisyTrueSeries-avg,1,'filled','k'); xlabel('model time series % signal'),ylabel('residual (true - avg)'); title('Residuals by pRF predictions')
-subplot(2,2,2),scatter(noisyTrueSeries,noisyTrueSeries-avg,1,'filled','k'); xlabel('true time series % signal'); ylabel('residual (true - avg)'); title('Residuals by time series activity')
-subplot(2,2,3),scatter(avg,noisyTrueSeries-avg,1,'filled','k'); xlabel('avg time series % signal'); ylabel('residual (true - avg)'); title('Residuals by mean model prediction')
-subplot(2,2,4),scatter(noisyTrueSeries,avg,1,'filled','k'); xlabel('Single Scan % signal'); ylabel('Avg % signal'); title('Single scan and average activity'); hold on;
-
-
-startparams(1) = 0; startparams(2) = 1; startparams(3) = 1; startparams(4) = 0;
-
-minsearch = [-1 -inf -inf -inf]; maxsearch = [1 inf inf inf]; opts = optimset('display','off'); opts = optimset('maxIter',2500);
-
-[params, logLikelihood] = lsqnonlin(@fitNoiseParameters,startparams,minsearch,maxsearch,opts,residuals,numScans,avg,noisyTrueSeries)
-
-
-
-
-
-
-
-
 
 
 keyboard
 
+figure,scatter(measuredSingleTSeries,lsqniosyStdTimeSeries);xlabel('BOLD signal');ylabel('Fit std');title('Std of error by BOLD signal');
+figure, scatter([1 2 3 4],lsqparams,'filled'); Labels = {'Mu';'Component Std';'Slope';'Beta'};set(gca,'xtick',[1:4],'xticklabel',Labels), xlim([0 5]);hold on,plot([0 5],[0 0],'k');
+xlabel('Parameter'),ylabel('Value'),title('Parameter values');
+%figure, scatter(lsqniosyStdTimeSeries,lsqniosyStdTimeSeries-fminniosyStdTimeSeries,1,'filled','k'),xlabel('lsq std'),ylabel('lsq std - fmin std');
 
+keyboard
 
 
 
@@ -170,13 +167,21 @@ keyboard
 %%%%%%%%%%%%%%%%%%%%%%%%
 %% fitNoiseParameters %%
 %%%%%%%%%%%%%%%%%%%%%%%%
-function logLikelihood = fitNoiseParameters(params,residuals,numScans,avg,noisyTrueSeries)
-mu = params(1); compstd = params(2); scale = params(3); beta = params(4);
+function logLikelihood = fitNoiseParameters(params,vox,voxel)
 
+% Parsing parameters and get tseries length
+additiveNoiseStd = params(1); multiplicativeNoiseScale = params(2); 
+timeSeriesLength = length(vox{voxel}.measuredSingleTSeries);
 
-std = ((normcdf(noisyTrueSeries)*scale+beta)+compstd).^2+(compstd/sqrt(numScans))^2;
-logLikelihood = sum(log(normpdf(residuals,mu,std)));
+% get residual T series as mean model Tseries - measured single Tseries
+residualTSeries = vox{voxel}.measuredSingleTSeries - vox{voxel}.avgTSeriesNScans;
+residualTSeries = residualTSeries;
 
+% calculate Std at every time point as a function of the model BOLD activity. Second term is a variance term, so take the sqrt (poisson mean-variance relationship)
+noiseStdTimeSeries = additiveNoiseStd*ones(1,timeSeriesLength) + multiplicativeNoiseScale*vox{voxel}.prfModelTSeries;
+
+% compute the likelihood of each residual time point %
+logLikelihood = sum(-log(normpdf(residualTSeries,0,noiseStdTimeSeries)))+100000;
 
 
 
@@ -213,7 +218,6 @@ channelMatrix = param.sigma^2 * (stdMatrix .* rfOverlapTrue);
 varCovarMatrix = covarMatrix + varMatrix + channelMatrix;
 
 correlatedNoise.individual = mvnrnd(zeros(1,numVoxels), varCovarMatrix, param.numVols);
-
 
 %% individual Ornstein Uhlenbeck noise %%
 if param.gaussianNoiseTime
@@ -290,7 +294,7 @@ if param.gaussianNoise;
     if param.multi %multiplicative noise
     tempnoise = transpose(correlatedNoise.individual(:,voxel));
     noise = tempnoise.*((tseries/max(tseries)+1).^param.multiDegree);
-    noise = noise/(std(noise)/std(tempnoise)); %
+    noise = noise/(std(noise)/std(tempnoise));
     tempseries = tseries+noise;
     else
     tempseries = tseries+transpose(correlatedNoise.individual(:,voxel));
@@ -315,7 +319,6 @@ startparams(1) = param.fieldSize/2; startparams(2) = param.fieldSize/2; startpar
 
 minsearch = [param.fieldSize/20 param.fieldSize/20 param.fieldSize/50]; maxsearch = [param.fieldSize*19/20 param.fieldSize*19/20 param.fieldSize]; opts = optimset('display','off'); %constrain search to visual field and >.5 std
 
-recover = 0; if recover
 [params] = lsqnonlin(@getModelResidual,startparams,minsearch,maxsearch,opts,noisytSeries,hrf,stimMovie,param);
 
 
@@ -338,21 +341,17 @@ elseif strcmp(param.rfRecType,'gaussianDiff');
         recrf(recrf<0) = 0;
     end
 end
-end
+
 %% grab things to return %%
 vox{voxel}.hrf = hrf;
-%vox{voxel}.Rparams = params;
-%vox{voxel}.Rrf = recrf;
-vox{voxel}.trueSeries = tseries;
-vox{voxel}.noisyTrueSeries = noisytSeries;
-%vox{voxel}.recoveredSeries = rectSeries;
-%vox{voxel}.noiseSeries = noisytSeries-rectSeries;
-%vox{voxel}.ntseries = ntseries;
+vox{voxel}.Rparams = params;
+vox{voxel}.Rrf = recrf;
+vox{voxel}.groundTruthTSeries = tseries;
+vox{voxel}.measuredSingleTSeries = noisytSeries;
+vox{voxel}.prfModelTSeries = rectSeries;
+vox{voxel}.noiseSeries = noisytSeries-rectSeries;
+vox{voxel}.ntseries = ntseries;
 
-%param.p.canonical.timelag = 3;
-%hrf = getCanonicalHRF(param.p.canonical,1);
-%hrftseries = getModelTSeries(stimMovie,vox{voxel}.OGrf,param,hrf);
-%vox{voxel}.trueSerieshrf = hrftseries;
 
 
 %%%%%%%%%%%%%%%%%%%%%%
@@ -456,6 +455,7 @@ function stimMovie = makeStimMovie(param)
 
 stimMovie = zeros(param.fieldSize,param.fieldSize,param.volumes*param.sweeps);
 
+% sweep a bar up/down and left/right randomly for x = param.sweeps. each sweep takes param.volumes iterations (seconds). 
 for sweep = 1:param.sweeps
     for volume = 1:(param.volumes)
         
@@ -498,12 +498,6 @@ end
 
 rfOverlapTrue = 0.5 * (rfOverlap + rfOverlap');
 
-%n = size(rfOverlap,1);
-%cvx_begin
-%variable rfOverlapTrue(n,n)
-%minimize(norm(rfOverlapTrue-rfOverlap,'fro'))
-%rfOverlapTrue -m *eye(n) == semidefinite(n)
-%cvx_end
 
 %%%%%%%%%%%%%%%%%%%%
 %% recTrueOverlap %%
@@ -528,17 +522,8 @@ end
 function showSynthVoxels
 figure;
 subplot(1,2,1);hold on;
-scatter(1:length(vox{v}.noisyTrueSeries),vox{v}.noisyTrueSeries);
-plot(1:length(vox{v}.recoveredSeries),vox{v}.recoveredSeries);
-plot(1:length(vox{v}.recoveredSeries),vox{v}.trueSeries,'black');
+scatter(1:length(vox{v}.measuredSingleTSeries),vox{v}.measuredSingleTSeries);
+plot(1:length(vox{v}.prfModelTSeries),vox{v}.prfModelTSeries);
+plot(1:length(vox{v}.prfModelTSeries),vox{v}.groundTruthTSeries,'black');
 subplot(2,2,2);imshow(rescale(vox{v}.OGrf)); title('True RF')
 subplot(2,2,4);imshow(rescale(vox{v}.Rrf)); title('Recovered RF')
-
-
-%% convex semi-definite program solution to make varCovar positive semidefinite %%
-%n = size(vcMatrix,1);
-%cvx_begin
-%variable varCovarMatrix(n,n)
-%minimize(norm(varCovarMatrix-vcMatrix,'fro'))
-%(varCovarMatrix -0*eye(n)) == semidefinite(n)
-%cvx_end
