@@ -139,21 +139,38 @@ opts = optimset('display','off','maxIter',1000000,'MaxFunEvals',1000000);
 minsearch = [0 -inf]; maxsearch = [inf inf];
 
 
-%search for std of additive noise and scaled component of multiplicative noise for each voxels
+%search for std of additive noise and scaled component of multiplicative noise for each voxel
 for voxel = 1:param.numVoxels
 [params, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
-    lsqnonlin(@fitNoiseParameters,startparams,minsearch,maxsearch,opts,vox,voxel);
+    lsqnonlin(@fitNoiseParameters,startparams,minsearch,maxsearch,opts,vox,voxel,1,0,0);
 
-params1{voxel} = params; resnorm1{voxel} = resnorm; residual1{voxel} = residual; exitflag1{voxel} = exitflag; %output1{voxel} = output, lambda1{voxel} = lambda, jacobian{voxel} = jacobian;
+fullFit.parameters{voxel} = params; fullFit.resnorms{voxel} = resnorm; fullFit.residual{voxel} = residual; fullFit.oxitflag{voxel} = exitflag; fullFit.output{voxel} = output; fullFit.lambda{voxel} = lambda; fullFit.jacobian{voxel} = jacobian;
 end
 
 
-keyboard
 
-figure,scatter(measuredSingleTSeries,lsqniosyStdTimeSeries);xlabel('BOLD signal');ylabel('Fit std');title('Std of error by BOLD signal');
-figure, scatter([1 2 3 4],lsqparams,'filled'); Labels = {'Mu';'Component Std';'Slope';'Beta'};set(gca,'xtick',[1:4],'xticklabel',Labels), xlim([0 5]);hold on,plot([0 5],[0 0],'k');
-xlabel('Parameter'),ylabel('Value'),title('Parameter values');
-%figure, scatter(lsqniosyStdTimeSeries,lsqniosyStdTimeSeries-fminniosyStdTimeSeries,1,'filled','k'),xlabel('lsq std'),ylabel('lsq std - fmin std');
+%% iterate through fixed multiplicative noise scales, just varying additive noise, and find the additive noise magnitudes and likelihoods
+% multiplicative scale to iterate through
+multiplicativeScales = -.1:.001:.1;
+
+for voxel = 1:param.numVoxels
+    iteration = 1;
+    for multiplicativeScale = multiplicativeScales;
+     [params, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
+         lsqnonlin(@fitNoiseParameters,startparams(1),minsearch(1),maxsearch(1),opts,vox,voxel,0,1,multiplicativeScale);
+
+    additiveFit.parameters{voxel}{iteration} = params; additiveFit.resnorms{voxel}{iteration} = resnorm; additiveFit.residual{voxel}{iteration} = residual-1000000; additiveFit.oxitflag{voxel}{iteration} = exitflag; additiveFit.output{voxel}{iteration} = output; additiveFit.lambda{voxel}{iteration} = lambda; additiveFit.jacobian{voxel}{iteration} = jacobian;
+    iteration = iteration+1;
+    end
+end
+keyboard
+figure, hold on, averageResiduals = 0;
+for voxel = 1:param.numVoxels
+    plot(multiplicativeScales,cell2mat(additiveFit.residual{voxel}),'lineWidth',1,'color',[.8 .8 .8])
+    averageResiduals = averageResiduals + cell2mat(additiveFit.residual{voxel});
+end
+plot(multiplicativeScales,averageResiduals/param.numVoxels,'lineWidth',3,'color',[0 0 0])
+xlabel('Multiplicative Noise Scale'),ylabel('Log Likelihood'),title('Log Likelihoods: Fit additive noise with varying multiplicative scaling');
 
 keyboard
 
@@ -167,10 +184,11 @@ keyboard
 %%%%%%%%%%%%%%%%%%%%%%%%
 %% fitNoiseParameters %%
 %%%%%%%%%%%%%%%%%%%%%%%%
-function logLikelihood = fitNoiseParameters(params,vox,voxel)
+function logLikelihood = fitNoiseParameters(params,vox,voxel,fitAll,additiveFit,multiplicativeScale)
 
 % Parsing parameters and get tseries length
-additiveNoiseStd = params(1); multiplicativeNoiseScale = params(2); 
+if fitAll; additiveNoiseStd = params(1); multiplicativeNoiseScale = params(2); end
+if additiveFit; additiveNoiseStd = params(1); multiplicativeNoiseScale = multiplicativeScale; end
 timeSeriesLength = length(vox{voxel}.measuredSingleTSeries);
 
 % get residual T series as mean model Tseries - measured single Tseries
@@ -181,7 +199,7 @@ residualTSeries = residualTSeries;
 noiseStdTimeSeries = additiveNoiseStd*ones(1,timeSeriesLength) + multiplicativeNoiseScale*vox{voxel}.prfModelTSeries;
 
 % compute the likelihood of each residual time point %
-logLikelihood = sum(-log(normpdf(residualTSeries,0,noiseStdTimeSeries)))+100000;
+logLikelihood = sum(-log(normpdf(residualTSeries,0,noiseStdTimeSeries)))+1000000;
 
 
 
