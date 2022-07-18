@@ -3,22 +3,31 @@
 %       By: Josh Wilson
 %       Created: June 2022
 %
-%   Subtracts the mean model (1 set of avg scans) from another scan and plots the residuals.
-%   At some point, I will do a model comparison of the types of noise.
+%   Look at noise characteristics by using a mean model from another scan. Requires 2 scans (averages of scans) as input.
 %
 %   The data2 input is the mean model; data1 is the true time series. You can set r2 cutoffs (and other stuff) in the script.
 %
 %
-%   Usage: avgModelNoise('data1=s0401mc12hrfFit.mat','data2=s0401mc345hrfFit.mat');
+%
+%
+%
+%
+%   Usage: [scanA, scanB, additiveFit, fullFit] = avgModelNoise('data1=s0401mc12hrfFit.mat','data2=s0401mc345hrfFit.mat');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 function [scanA, scanB, additiveFit, fullFit] = avgModelNoise(varargin);       
+
+
+
+%%%%%%%%%%%%%%%%%%
+%% Prepare Data %%
+%%%%%%%%%%%%%%%%%%
 
 %% Load Data %%
 getArgs(varargin);
 load(data1); cleanRoisA = rois;
 load(data2); cleanRoisB = rois;
-
+roiNames = {'V1';'V2';'V3'};
 
 
 %% Clean Data %%
@@ -36,8 +45,14 @@ scanA(roi).pRFtSeries = cleanRoisA(roi).vox.pRFtSeries(:,analysisCutoff)'; scanB
 % get number of voxels and number of frames
 scanA(roi).nFrames = cleanRoisA(roi).nFrames; scanB(roi).nFrames = cleanRoisB(roi).nFrames;
 scanA(roi).nVoxels = sum(analysisCutoff); scanB(roi).nVoxels = sum(analysisCutoff);
+scanA(roi).r2min = r2min; scanB(roi).r2min = r2min;
 end
 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Multiplicative noise fitting %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
 %% Fit additive noise to fixed multiplicative scaling values and plot log likelihoods %%
@@ -63,11 +78,11 @@ for voxel = 1:scanA(roi).nVoxels;
     iteration = iteration+1;
     end %scales
 end %voxels
+additiveFit(roi).multiplicativeScales = multiplicativeScales;
 end %rois
 
 
-
-%% graph the loglikelihoods for each voxel at each multi scale %%
+%% graph the log likelihoods for each voxel at each multi scale %%
 figure
 
 % go through every roi
@@ -75,21 +90,77 @@ for roi = 1:length(scanA)
 subplot(1,length(scanA),roi); averageResiduals = 0; hold on;
 
 % start count for total graphed voxels and set the r2 cutoff you want to graph
-graphCutoff = 0; totalGraphedVoxels = 0
+graphMinCutoff = .6; graphMaxCutoff=1; totalGraphedVoxels = 0;
 
 % plot voxels with r2 greater than graphCutoff and tally number of plotted voxels
 for voxel = 1:scanA(roi).nVoxels
-    if (scanA(roi).r2(voxel) > graphCutoff & scanB(roi).r2(voxel > graphCutoff))
-        plot(multiplicativeScales,cell2mat(additiveFit(roi).residual{voxel}),'lineWidth',1,'color',[.8 .8 .8])
+
+    %check if over min and under max r2 cutoffs
+    if ((scanA(roi).r2(voxel) > graphMinCutoff & scanB(roi).r2(voxel) > graphMinCutoff) & ...
+       (scanA(roi).r2(voxel) < graphMaxCutoff & scanB(roi).r2(voxel) < graphMaxCutoff))
+
+        % if so, plot 
+        plot(additiveFit(roi).multiplicativeScales,cell2mat(additiveFit(roi).residual{voxel}),'lineWidth',1,'color',[1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4 1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4  1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4])
+        
+        % add to average residual
         averageResiduals = averageResiduals + cell2mat(additiveFit(roi).residual{voxel});
         totalGraphedVoxels = totalGraphedVoxels+1;
+
     end %cutoff check
 end %voxel iteration
 
 % plot the average 
-plot(multiplicativeScales,averageResiduals/totalGraphedVoxels,'lineWidth',3,'color',[0 0 0])
-xlabel('Multiplicative Noise Scale'),ylabel('Log Likelihood'),title('Log likelihoods with fit additive noise');
+plot(additiveFit(roi).multiplicativeScales,averageResiduals/totalGraphedVoxels,'lineWidth',4,'color',[0 0 0])
+xlabel('Multiplicative Noise Scale'),ylabel('Log Likelihood'),title(sprintf('%S Log likelihoods with fit additive noise',roiNames{roi}));
 end
+
+
+%% graph the std of the noise at binned activity levels %%
+bins = 10; figure;
+
+for roi = 1:length(scanA)
+
+    % start count for total graphed voxels and set the r2 cutoff you want to graph
+    graphMinCutoff = .5; graphMaxCutoff=1; totalGraphedVoxels = 0; avgStds = zeros(1,bins);
+    subplot(1,3,roi); hold on;
+
+    for voxel = 1:length(scanA(roi).r2)
+
+
+        % check for r2 cutoffs
+        if ((scanA(roi).r2(voxel) > graphMinCutoff & scanB(roi).r2(voxel) > graphMinCutoff) & ...
+        (scanA(roi).r2(voxel) < graphMaxCutoff & scanB(roi).r2(voxel) < graphMaxCutoff))
+
+            % count this voxel
+            totalGraphedVoxels = totalGraphedVoxels +1;
+            
+            % iterate through bins
+            for bin = 0:1/bins:1-1/bins
+                    
+                % find the percentage (by bin) cutoffs in the pRFtSeries
+                lowPercentile = prctile(scanA(roi).pRFtSeries(voxel,:),bin*100);
+                highPercentile = prctile(scanA(roi).pRFtSeries(voxel,:),(bin+(1/bins))*100);
+                residualTSeries = scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:);
+                
+                % calculate std of residuals in the bin boundaries
+                binStd = std(residualTSeries((scanA(roi).pRFtSeries(voxel,:) >= lowPercentile) & (scanA(roi).pRFtSeries(voxel,:) <= highPercentile)));
+                avgStds(round(bin*10+1)) = avgStds(round(bin*10+1)) + binStd;
+
+                % plot
+                scatter(bin, binStd,1,'k');
+                end % r2 check
+
+        end % bin iteration
+
+    end % voxel iteration
+    
+    % plot average
+    scatter(0:1/bins:1-1/bins, avgStds/totalGraphedVoxels,75,'filled','k');
+
+    % label stuff
+    xlabel(['pRF activity bin']),ylabel('Std of residuals'); title(sprintf('Std of residuals by activity level: %S',roiNames{roi}));
+
+end % roi iteration
 
 
 
@@ -115,8 +186,84 @@ end %roi iteration
 
 
 
+%%%%%%%%%%%%%%%%%%%%%%
+%% Autocorrelations %%
+%%%%%%%%%%%%%%%%%%%%%%
+figure
+
+% iterate through rois
+for roi = 1:length(scanA)
+
+    subplot(2,length(scanA),roi); hold on, allCorrelations = 0; totalGraphedVoxels = 0;
+    zScoreTseries = 0;
+    
+    % go through every voel
+    for voxel = 1:scanA(roi).nVoxels
+    
+        % check it it meets r2 cutoff
+        graphMinCutoff = .5; graphMaxCutoff=1;
+    
+        if ((scanA(roi).r2(voxel) > graphMinCutoff & scanB(roi).r2(voxel) > graphMinCutoff) & ...
+           (scanA(roi).r2(voxel) < graphMaxCutoff & scanB(roi).r2(voxel) < graphMaxCutoff))
+    
+        % if so, initiate params
+        lags = []; correlations = [];
+    
+        % calculate residual time series
+        residualTSeries = scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:);
+        if zScoreTseries;
+            residualTSeries = scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:);
+        end
+    
+        % iterate through lags and calculate correlation
+        for lag = 0:scanA(roi).nFrames-1
+            shiftedResidualTSeries = [residualTSeries(lag+1:end) residualTSeries(1:lag)];
+            lags = [lags lag]; correlations = [correlations corr2(residualTSeries,shiftedResidualTSeries)];
+        end
+    
+        % plot it
+        plot(lags,correlations,'LineWidth',1,'color',[1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4 1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4  1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4])
+    
+        % add to grop data
+        allCorrelations = allCorrelations + correlations;
+        totalGraphedVoxels = totalGraphedVoxels + 1;
+        
+        end %cutoff check
+    
+    end %voxel iteration
+    
+    % plot group data
+    plot(lags,allCorrelations/totalGraphedVoxels,'LineWidth',4,'color','k')
+    title(sprintf('Autocorrelations: %s',roiNames{roi}));xlabel('Lag (TRs)');ylabel('Correlation');
+    
+    % fourier transform
+    subplot(2,length(scanA),roi+length(scanA));
+    fftTSeries = fft(allCorrelations);
+    % set mean to zero
+    fftTSeries(1) = 0;
+    % plot it 
+    plot(1:(length(fftTSeries)/2)-1,abs(fftTSeries(2:length(fftTSeries)/2)),'k.-');
+    xlabel('FFT components'); ylabel('FFT of fMRI Signal'); title('Fourier Components')
+    axis tight; zoom on
+
+end %roi iteration
+
+
+
+
+
+
+
+
+
+
+
+
 
 %% END OF SCRIPT %%
+
+
+
 
 
 
