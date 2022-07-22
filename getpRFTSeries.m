@@ -122,7 +122,7 @@ end
 
 % set the cutoffs for voxels you want to look at %
 r2min = .6
-eccMin = .1; eccMax = 25;
+eccMin = 0; eccMax = 25;
 rfWmin = 1; rfWmax = 20;
 cleanRois = rois
 
@@ -302,7 +302,7 @@ for roi = 1:length(cleanRois)
     for voxel = 1:length(cleanRois(roi).vox.linearCoords)
         
     % get values you need %
-    noise = cleanRois(roi).vox.baselineNoise(:,voxel); 
+    noise = abs(cleanRois(roi).vox.baselineNoise(:,voxel)); 
     prf = cleanRois(roi).vox.pRFtSeries(:,voxel); 
     
     % calculate slope time series %
@@ -313,7 +313,7 @@ for roi = 1:length(cleanRois)
     noise = noise(2:239)*100; slope = slope(2:239)*100; % remove first and last values
     
     % plot slopes %
-    figure(29); subplot(2,3,roi); hold on; scatter(slope,noise);
+    figure(29); subplot(2,3,roi); hold on; scatter(prf(2:239),noise);
     
     % throw this voxel into group data %
     for i = 1:length(noise); s(i) = slope(i); n(i) = noise(i);end;
@@ -440,7 +440,7 @@ for i = 2:3, v1v3expFit(i).LineStyle = '--'; v1v3expFit(i).LineWidth = .75; end
 
 legend('','Linear Fit', 'Exponential Fit');
 title('V1/V3 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
-
+ylim([-.5 1]);
 drawPublishAxis('labelFontSize=14');
 leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.6 0.2 0.2685 0.1003];
 
