@@ -28,19 +28,26 @@ getArgs(varargin);
 load(data1); cleanRoisA = rois;
 load(data2); cleanRoisB = rois;
 roiNames = {'V1';'V2';'V3'};
+correctSignalChangeScale = 1;
 
 
 %% Clean Data %%
 for roi = 1:length(cleanRoisA)
 
 % set cutoffs
-r2min = .6;
+r2min = .2;
 analysisCutoff = (cleanRoisA(roi).vox.r2 > r2min) & (cleanRoisB(roi).vox.r2 > r2min);
 
 % create new data structures with cutoff stats
 scanA(roi).r2 = cleanRoisA(roi).vox.r2(analysisCutoff); scanB(roi).r2 = cleanRoisB(roi).vox.r2(analysisCutoff);
 scanA(roi).tSeries = cleanRoisA(roi).vox.tSeries(:,analysisCutoff)'; scanB(roi).tSeries = cleanRoisB(roi).vox.tSeries(:,analysisCutoff)';
 scanA(roi).pRFtSeries = cleanRoisA(roi).vox.pRFtSeries(:,analysisCutoff)'; scanB(roi).pRFtSeries = cleanRoisB(roi).vox.pRFtSeries(:,analysisCutoff)';
+
+% correct the scale if needed
+if correctSignalChangeScale
+    scanA(roi).tSeries = scanA(roi).tSeries/100+1; scanB(roi).tSeries = scanB(roi).tSeries/100+1;
+    scanA(roi).pRFtSeries = scanA(roi).pRFtSeries/100+1; scanB(roi).pRFtSeries = scanB(roi).pRFtSeries/100+1;
+end
 
 % get number of voxels and number of frames
 scanA(roi).nFrames = cleanRoisA(roi).nFrames; scanB(roi).nFrames = cleanRoisB(roi).nFrames;
@@ -61,7 +68,7 @@ end
 startparams(1) = 1;
 opts = optimset('display','off','maxIter',1000000,'MaxFunEvals',1000000,'DiffMinChange',0);
 minsearch = [0]; maxsearch = [inf];
-multiplicativeScales = -2:1:2;
+multiplicativeScales = -1:.25:1;
 
 % go through each roi and voxel individually
 for roi = 1:length(scanA)
@@ -111,7 +118,7 @@ end %voxel iteration
 
 % plot the average 
 plot(additiveFit(roi).multiplicativeScales,averageResiduals/totalGraphedVoxels,'lineWidth',4,'color',[0 0 0])
-xlabel('Multiplicative Noise Scale'),ylabel('Log Likelihood'),title(sprintf('%S Log likelihoods with fit additive noise',roiNames{roi}));
+xlabel('Multiplicative Noise Scale'),ylabel('Log Likelihood'),title(sprintf('%s Log likelihoods with fit additive noise',roiNames{roi})),
 end
 
 
@@ -121,7 +128,7 @@ bins = 10; figure;
 for roi = 1:length(scanA)
 
     % start count for total graphed voxels and set the r2 cutoff you want to graph
-    graphMinCutoff = .5; graphMaxCutoff=1; totalGraphedVoxels = 0; avgStds = zeros(1,bins);
+    graphMinCutoff = .6; graphMaxCutoff=1; totalGraphedVoxels = 0; avgStds = zeros(1,bins); binPlot = []; binStdPlot = [];
     subplot(1,3,roi); hold on;
 
     for voxel = 1:length(scanA(roi).r2)
@@ -144,10 +151,11 @@ for roi = 1:length(scanA)
                 
                 % calculate std of residuals in the bin boundaries
                 binStd = std(residualTSeries((scanA(roi).pRFtSeries(voxel,:) >= lowPercentile) & (scanA(roi).pRFtSeries(voxel,:) <= highPercentile)));
-                avgStds(round(bin*10+1)) = avgStds(round(bin*10+1)) + binStd;
+                avgStds(round(bin*bins+1)) = avgStds(round(bin*bins+1)) + binStd;
 
                 % plot
-                scatter(bin, binStd,1,'k');
+                binPlot = [binPlot bin]; 
+                binStdPlot = [binStdPlot binStd];
                 end % r2 check
 
         end % bin iteration
@@ -155,6 +163,7 @@ for roi = 1:length(scanA)
     end % voxel iteration
     
     % plot average
+    scatter(binPlot,binStdPlot,1,'filled','k')
     scatter(0:1/bins:1-1/bins, avgStds/totalGraphedVoxels,75,'filled','k');
 
     % label stuff
@@ -177,7 +186,8 @@ for voxel = 1:scanA(roi).nVoxels;
 
     % fit the additive noise component and multiplicative scaling to find log likelihood
      [params, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
-         lsqnonlin(@fitNoiseParameters,startparams,minsearch,maxsearch,opts,scanA,scanB,voxel,roi,1,0,0);
+         lsqnonlin(@fitNoiseParameters,startparams,minsearch,maxsearch,opts,scanA,scanB,voxel,roi,1,0,0); 
+         [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
 
     % save the parameters, likelihoods, exit flag, jacobian
     fullFit(roi).parameters{voxel} = params; fullFit(roi).resnorms{voxel} = resnorm; fullFit(roi).residual{voxel} = residual(1)-1000; fullFit(roi).exitflag{voxel} = exitflag; fullFit(roi).output{voxel} = output; fullFit(roi).lambda{voxel} = lambda; fullFit(roi).jacobian{voxel} = jacobian;
@@ -189,52 +199,49 @@ end %roi iteration
 %%%%%%%%%%%%%%%%%%%%%%
 %% Autocorrelations %%
 %%%%%%%%%%%%%%%%%%%%%%
+zScoreTseries = 0; graphMinCutoff = .6; graphMaxCutoff=1;
 figure
 
 % iterate through rois
 for roi = 1:length(scanA)
 
+    % reset counts for each roi and change subplots
     subplot(2,length(scanA),roi); hold on, allCorrelations = 0; totalGraphedVoxels = 0;
-    zScoreTseries = 0;
     
-    % go through every voel
+    % go through every voxel
     for voxel = 1:scanA(roi).nVoxels
     
         % check it it meets r2 cutoff
-        graphMinCutoff = .5; graphMaxCutoff=1;
-    
         if ((scanA(roi).r2(voxel) > graphMinCutoff & scanB(roi).r2(voxel) > graphMinCutoff) & ...
            (scanA(roi).r2(voxel) < graphMaxCutoff & scanB(roi).r2(voxel) < graphMaxCutoff))
-    
-        % if so, initiate params
-        lags = []; correlations = [];
-    
-        % calculate residual time series
-        residualTSeries = scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:);
-        if zScoreTseries;
-            residualTSeries = scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:);
-        end
-    
-        % iterate through lags and calculate correlation
-        for lag = 0:scanA(roi).nFrames-1
-            shiftedResidualTSeries = [residualTSeries(lag+1:end) residualTSeries(1:lag)];
-            lags = [lags lag]; correlations = [correlations corr2(residualTSeries,shiftedResidualTSeries)];
-        end
-    
-        % plot it
-        plot(lags,correlations,'LineWidth',1,'color',[1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4 1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4  1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4])
-    
-        % add to grop data
-        allCorrelations = allCorrelations + correlations;
-        totalGraphedVoxels = totalGraphedVoxels + 1;
         
-        end %cutoff check
+            % if so, initiate params
+            lags = []; correlations = [];
+        
+            % calculate residual time series
+            residualTSeries = scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:);
+            if zScoreTseries; residualTSeries = zscore(scanA(roi).tSeries(voxel,:)) - zscore(scanB(roi).tSeries(voxel,:)); end
+        
+            % iterate through lags and calculate correlation
+            for lag = 0:scanA(roi).nFrames-1
+                shiftedResidualTSeries = [residualTSeries(lag+1:end) residualTSeries(1:lag)];
+                lags = [lags lag]; correlations = [correlations corr2(residualTSeries,shiftedResidualTSeries)];
+            end
+        
+            % plot it
+            plot(lags,correlations,'LineWidth',1,'color',[1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4 1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4  1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4])
+        
+            % add to group data
+            allCorrelations = allCorrelations + correlations;
+            totalGraphedVoxels = totalGraphedVoxels + 1;
+            
+        end %r2 cutoff check
     
     end %voxel iteration
     
     % plot group data
     plot(lags,allCorrelations/totalGraphedVoxels,'LineWidth',4,'color','k')
-    title(sprintf('Autocorrelations: %s',roiNames{roi}));xlabel('Lag (TRs)');ylabel('Correlation');
+    title(sprintf('s01 Autocorrelations: %s',roiNames{roi}));xlabel('Lag (TRs)');ylabel('Correlation');
     
     % fourier transform
     subplot(2,length(scanA),roi+length(scanA));
@@ -254,15 +261,7 @@ end %roi iteration
 
 
 
-
-
-
-
-
-
 %% END OF SCRIPT %%
-
-
 
 
 
