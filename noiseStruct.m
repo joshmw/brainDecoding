@@ -10,12 +10,14 @@
 
 function noiseStruct(varargin)
 
+%% Set up data, matrices: residual correlations, rf overlap, distance, variance 
 % get arguments
 getArgs(varargin);
 load(data);
 
-% structure data - here, put ALL the voxels from every ROI you want
+% structure data - here, put ALL the voxels from every ROI you want into
 [xCenters yCenters stdCenters tSeries pRFtSeries pRFresidualtSeries scanCoords] = structureData(cleanRois);
+numVoxels = length(xCenters);
 
 % get noise Correlation, overlap, and distance matrices (n x n)
 pRFresidualCorrMatrix = corr(pRFresidualtSeries);
@@ -23,11 +25,24 @@ rfOverlapMatrix = findOverlapMatrix(xCenters,yCenters,stdCenters);
 distanceMatrix = findDistanceMatrix(scanCoords);
 varianceMatrix = std(pRFresidualtSeries)' * std(pRFresidualtSeries);
 
-% plot it
+% plot it, just to make sure it's not fucked up
 figure,subplot(1,3,1);imshow(pRFresidualCorrMatrix);title('pRF residual correlations');...
     subplot(1,3,2);imshow(rfOverlapMatrix);title('Receptive field Overlap');...
     subplot(1,3,3);imshow(rescale(distanceMatrix)); title('3d Voxel distance');
 
+
+
+%% do stuff%%
+
+manualVarCovarMatrix = pRFresidualCorrMatrix.*varianceMatrix;
+matlabVarCovarMatrix = cov(pRFresidualtSeries);
+
+keyboard
+
+
+logmvnpdf(pRFresidualtSeries(1,:),zeros(1,numVoxels),makePosSemiDef(manualVarCovarMatrix))
+
+logmvnpdf(pRFresidualtSeries(1,:),zeros(1,numVoxels),makePosSemiDef(matlabVarCovarMatrix))
 
 
 keyboard
@@ -44,20 +59,7 @@ keyboard
 
 
 
-
-
-
-
-
-
-
-
 %% END OF SCRIPT %%
-
-
-
-
-
 
 
 
@@ -128,6 +130,34 @@ for row = 1:length(scanCoords)
         distanceMatrix(row,column) = dist;
     end
 end
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% makePositiveSemiDefinite %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function outputMatrix = makePosSemiDef(inputMatrix);
+
+% check if minimum eigenvalue is below zero, else end
+if min(eig(inputMatrix)) > 0;
+    
+    outputMatrix = inputMatrix;
+
+% if not, do adjustment
+else
+    
+    % check the adjustment and issue warning if it is large
+    eigToAdd = min(eig(inputMatrix));
+    if median(abs(inputMatrix(:)))/eigToAdd > -10^10;
+        disp(sprintf(['Identity matrix you are adding is less than 10 orders of magnitude less than the median covariance value. \n' ...
+            'Consider re-checking whether your matrix is non positive semi-definite due to rounding error, or actual contents.']))
+    end
+
+    % add an identify matrix multiplied by the minimum eigenvalue of the input matrix
+    outputMatrix = inputMatrix+eye(length(inputMatrix))*abs(min(eig(inputMatrix)));
+
+end
+
 
 
 
