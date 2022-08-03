@@ -3,12 +3,25 @@
 %       By: Josh Wilson
 %       Created: March 2022
 %
-%       I don't know what this does yet.
+%       Takes two retinotopy scans (training and testing) and evaluates
+%       different noise models. Calculates individual voxel variance and
+%       covariances from training data. I port over the variance values of
+%       the voxels for the testing data from the training data, scaled by the number of scans (but you can
+%       fit if you want).
 %
+%       Covariance models I test on the training and testing data here:
+%           - exact residaul covariance from the training data (should do horribly on test data but best on training)
+%           - variance only
+%           - global covariance/global covariance + channel covariance (both fit on the training data, from Jehee)
+%           - rf Overlap and/or voxel distance exponential fits (alpha/beta/Nu parameters fit to training data)
 %
+%       Example Usage:
+%
+%           noiseStruct('trainData=s0401mc345GaussianHdrNM.mat','testData=s0401mc12GaussianHdrNM.mat','numTrain=3','numTest=2')
+%           note: each scan should be the cleanRois and rois data from getprftseries. Set your voxel cutoffs there.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function noiseStruct(varargin)
+function [train test] = noiseStruct(varargin)
 
 
 
@@ -36,8 +49,12 @@ covarianceMatrix = std(pRFresidualtSeries)' * std(pRFresidualtSeries);
 
 
 %% calculate log likelihoods of different models %%
-% set mean for mvnPdf as zero
+% get value to scale test covariance by number of scans
+scaleByNumScans = sqrt(numTrainScans)/sqrt(numTestScans);
+
+% set zero mean values for logmvnpdf input
 pdfMean = zeros(1,numVoxels);
+
 
 % Known covariance model %
     
@@ -46,7 +63,7 @@ pdfMean = zeros(1,numVoxels);
     
     % calculate likelihood with known variance-covariance matrix
     train.KnownVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarCovarMatrix));
-    test.KnownVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarCovarMatrix));
+    test.KnownVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarCovarMatrix*scaleByNumScans));
     
     
 % Variance only model %
@@ -56,7 +73,7 @@ pdfMean = zeros(1,numVoxels);
 
     % calculate likelihood with known variance matrix
     train.KnownVarianceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarianceMatrix));
-    test.KnownVarianceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarianceMatrix));
+    test.KnownVarianceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarianceMatrix*scaleByNumScans));
 
 
 % Fit single-term covariance Model %
@@ -74,7 +91,7 @@ pdfMean = zeros(1,numVoxels);
 
     % calc likelihood with Jehee-inspired variance covariance matrix
     train.JeheeVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeVarCovarMatrix));
-    test.JeheeVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeVarCovarMatrix));
+    test.JeheeVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeVarCovarMatrix*scaleByNumScans));
 
 
 % Variance, global covariance, and rf covariance model %
@@ -94,7 +111,7 @@ pdfMean = zeros(1,numVoxels);
 
     % calc likelihood with the covariance matrix
     train.JeheeFullLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeFullMatrix));
-    test.JeheeFullLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeFullMatrix));
+    test.JeheeFullLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeFullMatrix*scaleByNumScans));
 
 
 % Individual covariance terms from overlap-corr fit model %
@@ -117,7 +134,7 @@ pdfMean = zeros(1,numVoxels);
 
     % calc likelihood with covariance matrix
     train.RfOverlapLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix));
-    test.RfOverlapLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix));
+    test.RfOverlapLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix*scaleByNumScans));
 
 
 % Individual covariance terms from distance-corr fit model %
@@ -140,7 +157,7 @@ pdfMean = zeros(1,numVoxels);
 
     % calc likelihood with covariance matrix
     train.DistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, distanceVarCovarMatrix));
-    test.DistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, distanceVarCovarMatrix));
+    test.DistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, distanceVarCovarMatrix*scaleByNumScans));
 
 
 % Individual terms based on overlap and distance %
@@ -160,7 +177,7 @@ pdfMean = zeros(1,numVoxels);
 
     % calc likelihood with covariance matrix
     train.OverlapDistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix))
-    test.OverlapDistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix))
+    test.OverlapDistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix*scaleByNumScans))
 
 
 
@@ -198,21 +215,19 @@ function [xCenters yCenters stdCenters tSeries pRFtSeries pRFresidualtSeries sca
 xCenters = []; yCenters = []; stdCenters = []; tSeries = [];  pRFtSeries  = []; pRFresidualtSeries = []; scanCoords = []; testpRFresidualtSeries = [];
 
 %loop through the ROIs you want to include
-for roi = 1:1
+for roi = 3
 
     % Training data: add things to the centralized matrices
     xCenters = [xCenters trainData.cleanRois(roi).vox.x];
     yCenters = [yCenters trainData.cleanRois(roi).vox.y];
     stdCenters = [stdCenters trainData.cleanRois(roi).vox.rfstd];
-    tSeries = [tSeries trainData.cleanRois(roi).vox.tSeries];
+    tSeries = [tSeries trainData.cleanRois(roi).vox.tSeries] ;
     pRFtSeries = [pRFtSeries trainData.cleanRois(roi).vox.pRFtSeries];
     pRFresidualtSeries = [pRFresidualtSeries trainData.cleanRois(roi).vox.tSeries - trainData.cleanRois(roi).vox.pRFtSeries];
     scanCoords = [scanCoords trainData.cleanRois(roi).vox.scanCoords];
 
     % Testing data: get the time series
     testpRFresidualtSeries = [testpRFresidualtSeries testData.rois(roi).vox.baselineNoise(:,ismember(testData.rois(roi).vox.linearCoords, trainData.cleanRois(roi).vox.linearCoords)) ];
-
-
 
 end
 
@@ -279,7 +294,7 @@ end %row of distance matrix
 function outputMatrix = makePosSemiDef(inputMatrix, checkWarning);
 
 % initial warning flag that will trigger if your ending matrix is adjusted by a large amount
-warningFlag = 0;
+warningFlag = 0; smallWarning = 0;
 
 % check if minimum eigenvalue is below zero, else end
 if min(eig(inputMatrix)) > 0;
@@ -304,6 +319,7 @@ else
 
     % add an identify matrix multiplied by the absolute value of the minimum eigenvalue of the input matrix to make all eigenvalues positive
     outputMatrix = inputMatrix+eye(length(inputMatrix))*abs(min(eig(inputMatrix)));
+    if checkWarning; smallWarning = 1; end
 
 end
 
@@ -324,7 +340,7 @@ if min(eig(outputMatrix)) < 0;
 
     % add the small identity matrix
     outputMatrix = outputMatrix + eye(length(outputMatrix))/10^18;
-
+    if checkWarning; smallWarning = 1; end
 end
 
 % send a warning if final output was adjusted by a large amount
@@ -332,6 +348,9 @@ if warningFlag
 sprintf('!!!!! WARNING !!!!! \nYour final covariance matrix had to be adjusted by a non-trivial amount in order to make it Positive Semi Definite. \nIt is likely that the reason it was not PSD was due to something other than a rounding error.')
 end
 
+if smallWarning
+sprintf('!!!!! WARNING !!!!! You added a small value to make the var/covar matrix positive definite.')
+end
 
 
 
@@ -388,9 +407,3 @@ function logLikelihood = getOverlapDistanceLikelihood(params,pRFresidualtSeries,
 
     % calc likelihood with Jehee-inspired variance covariance matrix
     logLikelihood = 10^8-sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix));
-
-
-
-
-
-
