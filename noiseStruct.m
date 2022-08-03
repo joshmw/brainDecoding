@@ -1,13 +1,11 @@
 %% noiseStruct.m 
 %
 %       By: Josh Wilson
-%       Created: March 2022
+%       Created: july 2022
 %
-%       Takes two retinotopy scans (training and testing) and evaluates
-%       different noise models. Calculates individual voxel variance and
-%       covariances from training data. I port over the variance values of
-%       the voxels for the testing data from the training data, scaled by the number of scans (but you can
-%       fit if you want).
+%       Takes two retinotopy scans (training and testing) and evaluates different noise models. Calculates individual voxel variance and
+%       covariances from training data. I port over the variance values of the voxels for the testing data from the training data, scaled 
+%       by the number of scans (but you can fit if you want).
 %
 %       Covariance models I test on the training and testing data here:
 %           - exact residaul covariance from the training data (should do horribly on test data but best on training)
@@ -121,7 +119,7 @@ pdfMean = zeros(1,numVoxels);
     pRFresidualCorrArray = pRFresidualCorrArray(rfOverlapArray < 1); rfOverlapArray = rfOverlapArray(rfOverlapArray < 1);
 
     % fit the exponential
-    expFit = fit(rfOverlapArray,pRFresidualCorrArray,'exp1');
+    expFit = fit(rfOverlapArray,pRFresidualCorrArray,'exp2');
     
     % make the matrix: get covar values from exponential fit, then 0 out the diagonal and add the variance matrix to get full varCovar
     rfOverlapCovarMatrix = arrayfun(@(x1)getCorFromFit(x1,expFit), rfOverlapMatrix);
@@ -144,7 +142,7 @@ pdfMean = zeros(1,numVoxels);
     pRFresidualCorrArray = pRFresidualCorrArray(distanceArray > 0); distanceArray = distanceArray(distanceArray > 0);
 
     % fit the exponential
-    expFit = fit(distanceArray,pRFresidualCorrArray,'exp1');
+    expFit = fit(distanceArray,pRFresidualCorrArray,'exp2');
     
     % make the matrix: get covar values from exponential fit, then 0 out the diagonal and add the variance matrix to get full varCovar
     distanceCovarMatrix = arrayfun(@(x1)getCorFromFit(x1,expFit), distanceMatrix);
@@ -215,7 +213,7 @@ function [xCenters yCenters stdCenters tSeries pRFtSeries pRFresidualtSeries sca
 xCenters = []; yCenters = []; stdCenters = []; tSeries = [];  pRFtSeries  = []; pRFresidualtSeries = []; scanCoords = []; testpRFresidualtSeries = [];
 
 %loop through the ROIs you want to include
-for roi = 3
+for roi = 1
 
     % Training data: add things to the centralized matrices
     xCenters = [xCenters trainData.cleanRois(roi).vox.x];
@@ -384,14 +382,14 @@ function logLikelihood = getJeheeFullLikelihood(params,covarianceMatrix,numVoxel
 
 
 
-%%%%%%%%%%%%%%%%%%%%%%%
-%% getCorFromOverlap %%
-%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%
+%% getCorFromFit %%
+%%%%%%%%%%%%%%%%%%%
 
 function y = getCorFromFit(x,expFit)
 
 % output of each matrix entry is the exponential fit to the data
-y = expFit.a*exp(x*expFit.b);
+y = expFit.a*exp(expFit.b*x) + expFit.c*exp(expFit.d*x);
 
 
 
