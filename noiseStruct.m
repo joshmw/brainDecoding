@@ -30,7 +30,7 @@ trainData = load(trainData);
 testData = load(testData);
 
 % structure data - here, put ALL the voxels from every ROI you want into
-[xCenters yCenters stdCenters tSeries pRFtSeries pRFresidualtSeries scanCoords testpRFresidualtSeries] = structureData(trainData,testData);
+[xCenters yCenters stdCenters tSeries pRFtSeries pRFresidualtSeries scanCoords testpRFresidualtSeries] = structureData(trainData,testData,rois);
 numVoxels = length(xCenters);
 
 % get noise Correlation, overlap, and distance matrices (n x n)
@@ -57,7 +57,7 @@ pdfMean = zeros(1,numVoxels);
 % Known covariance model %
     
     % calculate varCovar matrix using known variance and correlations
-    trueVarCovarMatrix = makePosSemiDef( pRFresidualCorrMatrix.*covarianceMatrix, 1);
+    trueVarCovarMatrix = nearestSPD( pRFresidualCorrMatrix.*covarianceMatrix);
     
     % calculate likelihood with known variance-covariance matrix
     train.KnownVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarCovarMatrix));
@@ -67,7 +67,7 @@ pdfMean = zeros(1,numVoxels);
 % Variance only model %
 
     % calculate only variance matrix from measured variance
-    trueVarianceMatrix = makePosSemiDef( covarianceMatrix .* eye(numVoxels), 1);
+    trueVarianceMatrix = nearestSPD( covarianceMatrix .* eye(numVoxels));
 
     % calculate likelihood with known variance matrix
     train.KnownVarianceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarianceMatrix));
@@ -85,7 +85,7 @@ pdfMean = zeros(1,numVoxels);
          [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
 
     % calc varCovar matrix as a weighted sum (by covariance Rho) of variance and covariance matrices
-    jeheeVarCovarMatrix = makePosSemiDef( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix, 1);
+    jeheeVarCovarMatrix = nearestSPD( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix);
 
     % calc likelihood with Jehee-inspired variance covariance matrix
     train.JeheeVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeVarCovarMatrix));
@@ -105,7 +105,7 @@ pdfMean = zeros(1,numVoxels);
     Rho = params(1); Sigma = params(2);
 
     % calc varCovar matrix as weighted sum of variance, covariance, and rf overlap
-    jeheeFullMatrix = makePosSemiDef( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix , 1);
+    jeheeFullMatrix = nearestSPD( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix );
 
     % calc likelihood with the covariance matrix
     train.JeheeFullLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeFullMatrix));
@@ -128,7 +128,7 @@ pdfMean = zeros(1,numVoxels);
     rfOverlapCovarMatrix = rfOverlapCovarMatrix - rfOverlapCovarMatrix.*eye(numVoxels) + eye(numVoxels);
 
     % multiply by the covar matrix
-    rfOverlapVarCovarMatrix = makePosSemiDef(rfOverlapCovarMatrix .* covarianceMatrix, 1);
+    rfOverlapVarCovarMatrix = nearestSPD(rfOverlapCovarMatrix .* covarianceMatrix);
 
     % calc likelihood with covariance matrix
     train.RfOverlapLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix));
@@ -151,7 +151,7 @@ pdfMean = zeros(1,numVoxels);
     distanceCovarMatrix = distanceCovarMatrix - distanceCovarMatrix.*eye(numVoxels) + eye(numVoxels);
 
     % multiply by the covar matrix
-    distanceVarCovarMatrix = makePosSemiDef(distanceCovarMatrix .* covarianceMatrix, 1);
+    distanceVarCovarMatrix = nearestSPD(distanceCovarMatrix .* covarianceMatrix);
 
     % calc likelihood with covariance matrix
     train.DistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, distanceVarCovarMatrix));
@@ -171,7 +171,7 @@ pdfMean = zeros(1,numVoxels);
     Nu = params(1);
 
     % get the matrix with Nu %
-    overlapDistanceVarCovarMatrix = makePosSemiDef( Nu*rfOverlapVarCovarMatrix + (1-Nu)*distanceVarCovarMatrix, 1);
+    overlapDistanceVarCovarMatrix = nearestSPD( Nu*rfOverlapVarCovarMatrix + (1-Nu)*distanceVarCovarMatrix);
 
     % calc likelihood with covariance matrix
     train.OverlapDistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix))
@@ -193,13 +193,13 @@ keyboard
 
 
 
-
-%% END OF SCRIPT %%
-
+% END OF SCRIPT %
 
 
 
-
+%~%~%~%~%~%~%~%~%~%~%~
+%% HELPER FUNCTIONS %%
+%~%~%~%~%~%~%~%~%~%~%~
 
 
 
@@ -207,13 +207,13 @@ keyboard
 %% structureData %%
 %%%%%%%%%%%%%%%%%%%
 
-function [xCenters yCenters stdCenters tSeries pRFtSeries pRFresidualtSeries scanCoords testpRFresidualtSeries] = structureData(trainData, testData);
+function [xCenters yCenters stdCenters tSeries pRFtSeries pRFresidualtSeries scanCoords testpRFresidualtSeries] = structureData(trainData, testData, rois);
 
 % make empty arrays/matrices of what you want
 xCenters = []; yCenters = []; stdCenters = []; tSeries = [];  pRFtSeries  = []; pRFresidualtSeries = []; scanCoords = []; testpRFresidualtSeries = [];
 
 %loop through the ROIs you want to include
-for roi = 1
+for roi = rois
 
     % Training data: add things to the centralized matrices
     xCenters = [xCenters trainData.cleanRois(roi).vox.x];
@@ -282,11 +282,78 @@ end %row of distance matrix
 
 
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% getJeheeVarCovarLikelihood %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function logLikelihood = getJeheeVarCovarLikelihood(Rho,covarianceMatrix,numVoxels,pRFresidualtSeries,pdfMean)
+
+    % calc varCovar matrix as a weighted sum (by covariance Rho) of variance and covariance matrices
+    jeheeVarCovarMatrix = nearestSPD( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix);
+
+    % calc likelihood with Jehee-inspired variance covariance matrix
+    logLikelihood = 10^8-sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeVarCovarMatrix));
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% getJeheeFullLikelihood %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function logLikelihood = getJeheeFullLikelihood(params,covarianceMatrix,numVoxels,pRFresidualtSeries,pdfMean,rfOverlapMatrix)
+    
+    Rho = params(1); Sigma = params(2);
+
+    % calc varCovar matrix as a weighted sum (by covariance Rho) of variance and covariance matrices
+    jeheeFullMatrix = nearestSPD( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix);
+
+    % calc likelihood with Jehee-inspired variance covariance matrix
+    logLikelihood = 10^8-sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeFullMatrix));
+
+
+
+%%%%%%%%%%%%%%%%%%%
+%% getCorFromFit %%
+%%%%%%%%%%%%%%%%%%%
+
+function y = getCorFromFit(x,expFit)
+
+% output of each matrix entry is the exponential fit to the data
+y = expFit.a*exp(expFit.b*x) + expFit.c*exp(expFit.d*x);
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% getOverlapDistanceLikelihood %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function logLikelihood = getOverlapDistanceLikelihood(params,pRFresidualtSeries,pdfMean,distanceVarCovarMatrix,rfOverlapVarCovarMatrix)
+    
+    Nu = params(1);
+
+    % calc varCovar matrix as a weighted sum (by covariance Rho) of variance and covariance matrices
+    overlapDistanceVarCovarMatrix = nearestSPD( Nu*rfOverlapVarCovarMatrix + (1-Nu)*distanceVarCovarMatrix);
+
+    % calc likelihood with Jehee-inspired variance covariance matrix
+    logLikelihood = 10^8-sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix));
+
+
+
+
+
+%~%~%~%~%~%~%~%~%~%~%~%~%~%~%
+% OUTDATED HELPER FUNCTIONS %
+%~%~%~%~%~%~%~%~%~%~%~%~%~%~%
+% I don't call any of these but used them at some point. Keeping for documentation reasons, I guess.
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% makePositiveSemiDefinite %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Josh 8/4/22: I've replaced this with nearestSPD from John D'Errico(https://www.mathworks.com/matlabcentral/fileexchange/42885-nearestspd).
+% It seems to have less of an effect on the log likelihood values. I think he is making smaller adjustments than my brute forcing.
+%
 % Makes a matrix positive semi definite by adding the minimum eigenvalue. This occurs in matlab with very small values due to rounding errors.
-% If the minmum eigenvalue is negaative enough to have potentially arisen from something other than rounding error, it will offer you a warning.
+% If the minmum eigenvalue is negative enough to have potentially arisen from something other than rounding error, it will offer you a warning.
 % Theoretically, all covariance matrices should be positive semi definite so this correction should only be fixing rounding errors if you pass in covar matrices.
 
 function outputMatrix = makePosSemiDef(inputMatrix, checkWarning);
@@ -350,58 +417,3 @@ if smallWarning
 sprintf('!!!!! WARNING !!!!! You added a small value to make the var/covar matrix positive definite.')
 end
 
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% getJeheeVarCovarLikelihood %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function logLikelihood = getJeheeVarCovarLikelihood(Rho,covarianceMatrix,numVoxels,pRFresidualtSeries,pdfMean)
-
-    % calc varCovar matrix as a weighted sum (by covariance Rho) of variance and covariance matrices
-    jeheeVarCovarMatrix = makePosSemiDef( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix , 0);
-
-    % calc likelihood with Jehee-inspired variance covariance matrix
-    logLikelihood = 10^8-sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeVarCovarMatrix));
-
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% getJeheeFullLikelihood %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function logLikelihood = getJeheeFullLikelihood(params,covarianceMatrix,numVoxels,pRFresidualtSeries,pdfMean,rfOverlapMatrix)
-    
-    Rho = params(1); Sigma = params(2);
-
-    % calc varCovar matrix as a weighted sum (by covariance Rho) of variance and covariance matrices
-    jeheeFullMatrix = makePosSemiDef( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix , 0);
-
-    % calc likelihood with Jehee-inspired variance covariance matrix
-    logLikelihood = 10^8-sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeFullMatrix));
-
-
-
-%%%%%%%%%%%%%%%%%%%
-%% getCorFromFit %%
-%%%%%%%%%%%%%%%%%%%
-
-function y = getCorFromFit(x,expFit)
-
-% output of each matrix entry is the exponential fit to the data
-y = expFit.a*exp(expFit.b*x) + expFit.c*exp(expFit.d*x);
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% getOverlapDistanceLikelihood %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function logLikelihood = getOverlapDistanceLikelihood(params,pRFresidualtSeries,pdfMean,distanceVarCovarMatrix,rfOverlapVarCovarMatrix)
-    
-    Nu = params(1);
-
-    % calc varCovar matrix as a weighted sum (by covariance Rho) of variance and covariance matrices
-    overlapDistanceVarCovarMatrix = makePosSemiDef( Nu*rfOverlapVarCovarMatrix + (1-Nu)*distanceVarCovarMatrix, 0);
-
-    % calc likelihood with Jehee-inspired variance covariance matrix
-    logLikelihood = 10^8-sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix));
