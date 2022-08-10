@@ -15,8 +15,9 @@
 %
 %       Example Usage:
 %
-%           noiseStruct('trainData=s0401mc345GaussianHdrNM.mat','testData=s0401mc12GaussianHdrNM.mat','numTrain=3','numTest=2')
-%           note: each scan should be the cleanRois and rois data from getprftseries. Set your voxel cutoffs there.
+%           noiseStruct(training data, testing data, number of scans averaged in training data, number of scans averaged in testing data, rois you want to use)
+%           noiseStruct('trainData=s0401mc345GaussianHdrNM.mat','testData=s0401mc12GaussianHdrNM.mat','numTrain=3','numTest=2','rois=[1 2 3]')
+%           note: each scan should be the cleanRois and rois data from getprftseries. Set your voxel cutoffs and list your rois there.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 function [train test] = noiseStruct(varargin)
@@ -40,9 +41,9 @@ distanceMatrix = findDistanceMatrix(scanCoords);
 covarianceMatrix = std(pRFresidualtSeries)' * std(pRFresidualtSeries);
 
 % plot it, just to make sure it's not fucked up
-%figure,subplot(1,3,1);imshow(pRFresidualCorrMatrix);title('pRF residual correlations');...
-%    subplot(1,3,2);imshow(rfOverlapMatrix);title('Receptive field Overlap');...
-%    subplot(1,3,3);imshow(rescale(distanceMatrix)); title('3d Voxel distance');
+figure,subplot(1,3,1);imshow(pRFresidualCorrMatrix);title('pRF residual correlations');...
+    subplot(1,3,2);imshow(rfOverlapMatrix);title('Receptive field Overlap');...
+    subplot(1,3,3);imshow(rescale(distanceMatrix)); title('3d Voxel distance');
 
 
 
@@ -58,20 +59,22 @@ pdfMean = zeros(1,numVoxels);
     
     % calculate varCovar matrix using known variance and correlations
     trueVarCovarMatrix = nearestSPD( pRFresidualCorrMatrix.*covarianceMatrix);
-    
+    minEig.KnwonVarCovarLikelihood = min( eig( pRFresidualCorrMatrix.*covarianceMatrix ));
+
     % calculate likelihood with known variance-covariance matrix
-    train.KnownVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarCovarMatrix));
-    test.KnownVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarCovarMatrix*scaleByNumScans));
+    train.KnownVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarCovarMatrix))/numVoxels;
+    test.KnownVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarCovarMatrix*scaleByNumScans))/numVoxels;
     
     
 % Variance only model %
 
     % calculate only variance matrix from measured variance
     trueVarianceMatrix = nearestSPD( covarianceMatrix .* eye(numVoxels));
+    minEig.trueVarianceMatrix = min( eig (covarianceMatrix .* eye(numVoxels)));
 
     % calculate likelihood with known variance matrix
-    train.KnownVarianceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarianceMatrix));
-    test.KnownVarianceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarianceMatrix*scaleByNumScans));
+    train.KnownVarianceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarianceMatrix))/numVoxels;
+    test.KnownVarianceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarianceMatrix*scaleByNumScans))/numVoxels;
 
 
 % Fit single-term covariance Model %
@@ -80,36 +83,38 @@ pdfMean = zeros(1,numVoxels);
     startparams(1) = 0; minsearch = [0]; maxsearch = [1];
     opts = optimset('display','off','maxIter',100000,'MaxFunEvals',100000,'TolX',10^-10,'TolFun',10^-10,'UseParallel',1);
     
-    [Rho, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
+    [singleTermRho, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
         lsqnonlin(@getJeheeVarCovarLikelihood,startparams,minsearch,maxsearch,opts,covarianceMatrix,numVoxels,pRFresidualtSeries,pdfMean); 
          [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
 
     % calc varCovar matrix as a weighted sum (by covariance Rho) of variance and covariance matrices
-    jeheeVarCovarMatrix = nearestSPD( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix);
+    jeheeVarCovarMatrix = nearestSPD( (1-singleTermRho)*covarianceMatrix.*eye(numVoxels) + singleTermRho*covarianceMatrix);
+    minEig.jeheeVarCovarMatrix = min( eig( (1-singleTermRho)*covarianceMatrix.*eye(numVoxels) + singleTermRho*covarianceMatrix));
 
     % calc likelihood with Jehee-inspired variance covariance matrix
-    train.JeheeVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeVarCovarMatrix));
-    test.JeheeVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeVarCovarMatrix*scaleByNumScans));
+    train.JeheeVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeVarCovarMatrix))/numVoxels;
+    test.JeheeVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeVarCovarMatrix*scaleByNumScans))/numVoxels;
 
 
 % Variance, global covariance, and rf covariance model %
 
     % fit parameters %
-    startparams = [0 0]; minsearch = [0 0]; maxsearch = [.5 1];
+    startparams = [.2 .2]; minsearch = [0 0]; maxsearch = [1 10];
     opts = optimset('display','off','maxIter',100000,'MaxFunEvals',100000,'TolX',10^-10,'TolFun',10^-10,'UseParallel',1);
     
     [params, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
         lsqnonlin(@getJeheeFullLikelihood,startparams,minsearch,maxsearch,opts,covarianceMatrix,numVoxels,pRFresidualtSeries,pdfMean,rfOverlapMatrix); 
          [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
     
-    Rho = params(1); Sigma = params(2);
+    fullRho = params(1); Sigma = params(2)^2;
 
     % calc varCovar matrix as weighted sum of variance, covariance, and rf overlap
-    jeheeFullMatrix = nearestSPD( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix );
+    jeheeFullMatrix = nearestSPD( (1-fullRho)*covarianceMatrix.*eye(numVoxels) + fullRho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix );
+    minEig.jeheeFullMatrix = min( eig ((1-fullRho)*covarianceMatrix.*eye(numVoxels) + fullRho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix));
 
     % calc likelihood with the covariance matrix
-    train.JeheeFullLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeFullMatrix));
-    test.JeheeFullLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeFullMatrix*scaleByNumScans));
+    train.JeheeFullLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeFullMatrix))/numVoxels;
+    test.JeheeFullLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeFullMatrix*scaleByNumScans))/numVoxels;
 
 
 % Individual covariance terms from overlap-corr fit model %
@@ -119,20 +124,23 @@ pdfMean = zeros(1,numVoxels);
     pRFresidualCorrArray = pRFresidualCorrArray(rfOverlapArray < 1); rfOverlapArray = rfOverlapArray(rfOverlapArray < 1);
 
     % fit the exponential
-    expFit = fit(rfOverlapArray,pRFresidualCorrArray,'exp2');
+    curveFitOpts = fitoptions('exp2','lower',[-5 -5 -5 -5],'upper',[5 5 5 5]);
+    overlapCurveFit = fit(rfOverlapArray,pRFresidualCorrArray,'exp2',curveFitOpts);
+    showFit(rfOverlapArray,pRFresidualCorrArray,overlapCurveFit,1);
     
     % make the matrix: get covar values from exponential fit, then 0 out the diagonal and add the variance matrix to get full varCovar
-    rfOverlapCovarMatrix = arrayfun(@(x1)getCorFromFit(x1,expFit), rfOverlapMatrix);
+    rfOverlapCovarMatrix = arrayfun(@(x1)getCorFromFit(x1,overlapCurveFit), rfOverlapMatrix);
 
     % adjust diagonal to 1 to keep variance
     rfOverlapCovarMatrix = rfOverlapCovarMatrix - rfOverlapCovarMatrix.*eye(numVoxels) + eye(numVoxels);
 
     % multiply by the covar matrix
     rfOverlapVarCovarMatrix = nearestSPD(rfOverlapCovarMatrix .* covarianceMatrix);
+    minEig.rfOverlapVarCovarMatrix = min( eig( rfOverlapCovarMatrix .* covarianceMatrix));
 
     % calc likelihood with covariance matrix
-    train.RfOverlapLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix));
-    test.RfOverlapLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix*scaleByNumScans));
+    train.RfOverlapLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix))/numVoxels;
+    test.RfOverlapLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix*scaleByNumScans))/numVoxels;
 
 
 % Individual covariance terms from distance-corr fit model %
@@ -142,20 +150,23 @@ pdfMean = zeros(1,numVoxels);
     pRFresidualCorrArray = pRFresidualCorrArray(distanceArray > 0); distanceArray = distanceArray(distanceArray > 0);
 
     % fit the exponential
-    expFit = fit(distanceArray,pRFresidualCorrArray,'exp2');
-    
+    curveFitOpts = fitoptions('exp2','lower',[-5 -5 -5 -5],'upper',[5 5 5 5]);
+    distanceCurveFit = fit(distanceArray,pRFresidualCorrArray,'exp2');
+    showFit(distanceArray,pRFresidualCorrArray,distanceCurveFit,2);
+
     % make the matrix: get covar values from exponential fit, then 0 out the diagonal and add the variance matrix to get full varCovar
-    distanceCovarMatrix = arrayfun(@(x1)getCorFromFit(x1,expFit), distanceMatrix);
+    distanceCovarMatrix = arrayfun(@(x1)getCorFromFit(x1,distanceCurveFit), distanceMatrix);
 
     % adjust diagonal to 1 to keep variance
     distanceCovarMatrix = distanceCovarMatrix - distanceCovarMatrix.*eye(numVoxels) + eye(numVoxels);
 
     % multiply by the covar matrix
     distanceVarCovarMatrix = nearestSPD(distanceCovarMatrix .* covarianceMatrix);
+    minEig.distanceVarCovarMatrix = min( eig( distanceCovarMatrix .* covarianceMatrix));
 
     % calc likelihood with covariance matrix
-    train.DistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, distanceVarCovarMatrix));
-    test.DistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, distanceVarCovarMatrix*scaleByNumScans));
+    train.DistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, distanceVarCovarMatrix))/numVoxels;
+    test.DistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, distanceVarCovarMatrix*scaleByNumScans))/numVoxels;
 
 
 % Individual terms based on overlap and distance %
@@ -172,12 +183,51 @@ pdfMean = zeros(1,numVoxels);
 
     % get the matrix with Nu %
     overlapDistanceVarCovarMatrix = nearestSPD( Nu*rfOverlapVarCovarMatrix + (1-Nu)*distanceVarCovarMatrix);
+    minEig.overlapDistanceVarCovarMatrix = min( eig(  Nu*rfOverlapVarCovarMatrix + (1-Nu)*distanceVarCovarMatrix));
 
     % calc likelihood with covariance matrix
-    train.OverlapDistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix))
-    test.OverlapDistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix*scaleByNumScans))
+    train.OverlapDistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix))/numVoxels
+    test.OverlapDistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix*scaleByNumScans))/numVoxels
 
 
+
+%% Plot the results %%
+figure; subplot(1,3,1);
+names = categorical({'True var/covar','Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
+names = reordercats(names,{'True var/covar','Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
+bar(names, ...
+    [train.KnownVarCovarLikelihood train.KnownVarianceLikelihood train.JeheeVarCovarLikelihood train.JeheeFullLikelihood train.RfOverlapLikelihood train.DistanceLikelihood train.OverlapDistanceLikelihood])
+
+title('s03 Training data'),xlabel('Model'),ylabel('Average loglikelihood of one observation');
+
+% testing data
+subplot(1,3,2)
+names = categorical({'Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
+names = reordercats(names,{'Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
+bar(names, ...
+    [test.KnownVarianceLikelihood test.JeheeVarCovarLikelihood test.JeheeFullLikelihood test.RfOverlapLikelihood test.DistanceLikelihood test.OverlapDistanceLikelihood])
+
+title('s03 Testing data'),xlabel('Model'),ylabel('Average loglikelihood of one observation');
+
+subplot(1,3,3),
+names = categorical({'Single Term Rho','Full Jehee Rho','Full Jehee Sigma','Nu'});
+names = reordercats(names,{'Single Term Rho','Full Jehee Rho','Full Jehee Sigma','Nu'});
+bar(names, ...
+    [singleTermRho fullRho Sigma Nu])
+ylim([0 1]),title('parameter estimates')
+
+
+
+
+
+    keyboard
+
+% fit variance? %
+    startparams = std(pRFresidualtSeries)*scaleByNumScans; minsearch = zeros(1,numVoxels); maxsearch = ones(1,numVoxels);
+
+    [params, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
+        lsqnonlin(@fitVariance,startparams,minsearch,maxsearch,opts,testpRFresidualtSeries,pdfMean,numVoxels); 
+        [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
 
 
 
@@ -225,7 +275,7 @@ for roi = rois
     scanCoords = [scanCoords trainData.cleanRois(roi).vox.scanCoords];
 
     % Testing data: get the time series
-    testpRFresidualtSeries = [testpRFresidualtSeries testData.rois(roi).vox.baselineNoise(:,ismember(testData.rois(roi).vox.linearCoords, trainData.cleanRois(roi).vox.linearCoords)) ];
+    testpRFresidualtSeries = [testpRFresidualtSeries testData.rois(roi).vox.baselineNoise(:,ismember(trainData.rois(roi).vox.linearCoords, trainData.cleanRois(roi).vox.linearCoords)) ];
 
 end
 
@@ -302,7 +352,7 @@ function logLikelihood = getJeheeVarCovarLikelihood(Rho,covarianceMatrix,numVoxe
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function logLikelihood = getJeheeFullLikelihood(params,covarianceMatrix,numVoxels,pRFresidualtSeries,pdfMean,rfOverlapMatrix)
     
-    Rho = params(1); Sigma = params(2);
+    Rho = params(1); Sigma = params(2)^2;
 
     % calc varCovar matrix as a weighted sum (by covariance Rho) of variance and covariance matrices
     jeheeFullMatrix = nearestSPD( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix);
@@ -335,6 +385,40 @@ function logLikelihood = getOverlapDistanceLikelihood(params,pRFresidualtSeries,
 
     % calc likelihood with Jehee-inspired variance covariance matrix
     logLikelihood = 10^8-sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix));
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%
+%% Function showFit %%
+%%%%%%%%%%%%%%%%%%%%%%
+function showFit(x,y,fitToData,type)
+figure(1);
+
+% plot RF overlap
+if type == 1; subplot(1,2,1)
+scatter(x,y,1,'filled','k'); hold on;
+graphFit = plot(fitToData,'predobs'); for i = 1:3, graphFit(i).Color = [0, 0.4470, 0.7410]; graphFit(i).LineWidth = 2; end
+for i = 2:3, graphFit(i).LineStyle = '--'; graphFit(i).LineWidth = .75; end;
+title('RF Overlap and residual correlation');xlabel('RF overlap (percent)'),ylabel('Residual Correlation'); ylim([-.5 1]);
+
+% plot distance
+elseif type == 2; subplot(1,2,2)
+scatter(x,y,1,'filled','k'); hold on;
+graphFit = plot(fitToData,'predobs'); for i = 1:3, graphFit(i).Color = [0, 0.4470, 0.7410]; graphFit(i).LineWidth = 2; end
+for i = 2:3, graphFit(i).LineStyle = '--'; graphFit(i).LineWidth = .75; end;
+title('Distance and residual correlation');xlabel('Voxel Distance (mm)'),ylabel('Residual Correlation'); ylim([-.5 1]);
+
+end
+
+
+
+%%%%%%%%%%%%%%%%%%%%%
+%% fitVariance %%
+function logLikelihood = fitVariance(params,testpRFresidualtSeries,pdfMean,numVoxels)
+
+varianceMatrix = nearestSPD((params' * params) .* eye(numVoxels));
+logLikelihood = 10^8 - sum(logmvnpdf( testpRFresidualtSeries, pdfMean, varianceMatrix));
+
 
 
 
