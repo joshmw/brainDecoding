@@ -62,8 +62,8 @@ pdfMean = zeros(1,numVoxels);
     minEig.KnwonVarCovarLikelihood = min( eig( pRFresidualCorrMatrix.*covarianceMatrix ));
 
     % calculate likelihood with known variance-covariance matrix
-    train.KnownVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarCovarMatrix))/numVoxels;
-    test.KnownVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarCovarMatrix*scaleByNumScans))/numVoxels;
+    train.KnownVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarCovarMatrix));
+    test.KnownVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarCovarMatrix*scaleByNumScans));
     
     
 % Variance only model %
@@ -73,8 +73,8 @@ pdfMean = zeros(1,numVoxels);
     minEig.trueVarianceMatrix = min( eig (covarianceMatrix .* eye(numVoxels)));
 
     % calculate likelihood with known variance matrix
-    train.KnownVarianceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarianceMatrix))/numVoxels;
-    test.KnownVarianceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarianceMatrix*scaleByNumScans))/numVoxels;
+    train.KnownVarianceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, trueVarianceMatrix));
+    test.KnownVarianceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, trueVarianceMatrix*scaleByNumScans));
 
 
 % Fit single-term covariance Model %
@@ -92,8 +92,8 @@ pdfMean = zeros(1,numVoxels);
     minEig.jeheeVarCovarMatrix = min( eig( (1-singleTermRho)*covarianceMatrix.*eye(numVoxels) + singleTermRho*covarianceMatrix));
 
     % calc likelihood with Jehee-inspired variance covariance matrix
-    train.JeheeVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeVarCovarMatrix))/numVoxels;
-    test.JeheeVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeVarCovarMatrix*scaleByNumScans))/numVoxels;
+    train.JeheeVarCovarLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeVarCovarMatrix));
+    test.JeheeVarCovarLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeVarCovarMatrix*scaleByNumScans));
 
 
 % Variance, global covariance, and rf covariance model %
@@ -113,8 +113,8 @@ pdfMean = zeros(1,numVoxels);
     minEig.jeheeFullMatrix = min( eig ((1-fullRho)*covarianceMatrix.*eye(numVoxels) + fullRho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix));
 
     % calc likelihood with the covariance matrix
-    train.JeheeFullLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeFullMatrix))/numVoxels;
-    test.JeheeFullLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeFullMatrix*scaleByNumScans))/numVoxels;
+    train.JeheeFullLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeFullMatrix));
+    test.JeheeFullLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, jeheeFullMatrix*scaleByNumScans));
 
 
 % Individual covariance terms from overlap-corr fit model %
@@ -139,8 +139,8 @@ pdfMean = zeros(1,numVoxels);
     minEig.rfOverlapVarCovarMatrix = min( eig( rfOverlapCovarMatrix .* covarianceMatrix));
 
     % calc likelihood with covariance matrix
-    train.RfOverlapLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix))/numVoxels;
-    test.RfOverlapLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix*scaleByNumScans))/numVoxels;
+    train.RfOverlapLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix));
+    test.RfOverlapLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, rfOverlapVarCovarMatrix*scaleByNumScans));
 
 
 % Individual covariance terms from distance-corr fit model %
@@ -165,15 +165,15 @@ pdfMean = zeros(1,numVoxels);
     minEig.distanceVarCovarMatrix = min( eig( distanceCovarMatrix .* covarianceMatrix));
 
     % calc likelihood with covariance matrix
-    train.DistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, distanceVarCovarMatrix))/numVoxels;
-    test.DistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, distanceVarCovarMatrix*scaleByNumScans))/numVoxels;
+    train.DistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, distanceVarCovarMatrix));
+    test.DistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, distanceVarCovarMatrix*scaleByNumScans));
 
 
 % Individual terms based on overlap and distance %
 
     % fit parameters %
-    startparams = [.5]; minsearch = [0]; maxsearch = [1];
-    opts = optimset('display','off','maxIter',100000,'MaxFunEvals',100000,'TolX',10^-10,'TolFun',10^-10,'UseParallel',1);
+    startparams = [0]; minsearch = [0]; maxsearch = [1];
+    opts = optimset('display','off','maxIter',100000,'MaxFunEvals',100000,'TolX',10^-30,'TolFun',10^-20,'UseParallel',1);
     
     [params, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
         lsqnonlin(@getOverlapDistanceLikelihood,startparams,minsearch,maxsearch,opts,pRFresidualtSeries,pdfMean,distanceVarCovarMatrix,rfOverlapVarCovarMatrix); 
@@ -186,38 +186,108 @@ pdfMean = zeros(1,numVoxels);
     minEig.overlapDistanceVarCovarMatrix = min( eig(  Nu*rfOverlapVarCovarMatrix + (1-Nu)*distanceVarCovarMatrix));
 
     % calc likelihood with covariance matrix
-    train.OverlapDistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix))/numVoxels
-    test.OverlapDistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix*scaleByNumScans))/numVoxels
+    train.OverlapDistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix))
+    test.OverlapDistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix*scaleByNumScans))
+
+
+keyboard
+
+%% Calculate AIC and BIC %%
+    numObservations = size(pRFresidualtSeries,1);
+
+    % calculate number of parameters in each model %
+    numParams.KnownVarCovar = numVoxels*numVoxels;
+    numParams.KnownVariance = numVoxels;
+    numParams.JeheeVarCovar = numVoxels + 1; %voxels + rho
+    numParams.JeheeFull = numVoxels + 2; %voxels + rho + sigma
+    numParams.RfOverlap = numVoxels + length(coeffvalues(overlapCurveFit)); % variances + curve fit
+    numParams.Distance = numVoxels + length(coeffvalues(distanceCurveFit)); % variances + curve fit
+    numParams.OverlapDistance = numVoxels + length(coeffvalues(overlapCurveFit)) + length(coeffvalues(distanceCurveFit)) + 1; % variances, both curves, Nu
+
+    % Calculate AIC %
+        
+        % training AIC %
+        aicTrain.KnownVarCovar = 2*numParams.KnownVarCovar - 2*train.KnownVarCovarLikelihood;
+        aicTrain.KnownVariance =  2*numParams.KnownVariance - 2*train.KnownVarianceLikelihood;
+        aicTrain.JeheeVarCovar = 2*numParams.JeheeVarCovar - 2*train.JeheeVarCovarLikelihood;
+        aicTrain.JeheeFull = 2*numParams.JeheeFull - 2*train.JeheeFullLikelihood;
+        aicTrain.RfOverlap = 2*numParams.RfOverlap - 2*train.RfOverlapLikelihood;
+        aicTrain.Distance = 2*numParams.Distance - 2*train.DistanceLikelihood;
+        aicTrain.OverlapDistance = 2*numParams.OverlapDistance - 2*train.OverlapDistanceLikelihood;
+
+        % testing AIC %
+        aicTest.KnownVarCovar = 2*numParams.KnownVarCovar - 2*test.KnownVarCovarLikelihood;
+        aicTest.KnownVariance =  2*numParams.KnownVariance - 2*test.KnownVarianceLikelihood;
+        aicTest.JeheeVarCovar = 2*numParams.JeheeVarCovar - 2*test.JeheeVarCovarLikelihood;
+        aicTest.JeheeFull = 2*numParams.JeheeFull - 2*test.JeheeFullLikelihood;
+        aicTest.RfOverlap = 2*numParams.RfOverlap - 2*test.RfOverlapLikelihood;
+        aicTest.Distance = 2*numParams.Distance - 2*test.DistanceLikelihood;
+        aicTest.OverlapDistance = 2*numParams.OverlapDistance - 2*test.OverlapDistanceLikelihood;
+
+    % Calculate BIC %
+        
+        % training BIC %
+        bicTrain.KnownVarCovar = log(numObservations)*numParams.KnownVarCovar - 2*train.KnownVarCovarLikelihood;
+        bicTrain.KnownVariance =  log(numObservations)*numParams.KnownVariance - 2*train.KnownVarianceLikelihood;
+        bicTrain.JeheeVarCovar = log(numObservations)*numParams.JeheeVarCovar - 2*train.JeheeVarCovarLikelihood;
+        bicTrain.JeheeFull = log(numObservations)*numParams.JeheeFull - 2*train.JeheeFullLikelihood;
+        bicTrain.RfOverlap = log(numObservations)*numParams.RfOverlap - 2*train.RfOverlapLikelihood;
+        bicTrain.Distance = log(numObservations)*numParams.Distance - 2*train.DistanceLikelihood;
+        bicTrain.OverlapDistance = log(numObservations)*numParams.OverlapDistance - 2*train.OverlapDistanceLikelihood;
+
+        % testing BIC %
+        bicTest.KnownVarCovar = log(numObservations)*numParams.KnownVarCovar - 2*test.KnownVarCovarLikelihood;
+        bicTest.KnownVariance =  log(numObservations)*numParams.KnownVariance - 2*test.KnownVarianceLikelihood;
+        bicTest.JeheeVarCovar = log(numObservations)*numParams.JeheeVarCovar - 2*test.JeheeVarCovarLikelihood;
+        bicTest.JeheeFull = log(numObservations)*numParams.JeheeFull - 2*test.JeheeFullLikelihood;
+        bicTest.RfOverlap = log(numObservations)*numParams.RfOverlap - 2*test.RfOverlapLikelihood;
+        bicTest.Distance = log(numObservations)*numParams.Distance - 2*test.DistanceLikelihood;
+        bicTest.OverlapDistance = log(numObservations)*numParams.OverlapDistance - 2*test.OverlapDistanceLikelihood;
+
+
+
+
+
+
+keyboard
 
 
 
 %% Plot the results %%
-figure; subplot(1,3,1);
-names = categorical({'True var/covar','Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
-names = reordercats(names,{'True var/covar','Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
-bar(names, ...
-    [train.KnownVarCovarLikelihood train.KnownVarianceLikelihood train.JeheeVarCovarLikelihood train.JeheeFullLikelihood train.RfOverlapLikelihood train.DistanceLikelihood train.OverlapDistanceLikelihood])
 
-title('s03 Training data'),xlabel('Model'),ylabel('Average loglikelihood of one observation');
+    % training data %
+        figure; subplot(1,3,1);
+        
+        % rename stuff and graph
+        names = categorical({'True var/covar','Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
+        names = reordercats(names,{'True var/covar','Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
+        bar(names, ...
+            [train.KnownVarCovarLikelihood train.KnownVarianceLikelihood train.JeheeVarCovarLikelihood train.JeheeFullLikelihood train.RfOverlapLikelihood train.DistanceLikelihood train.OverlapDistanceLikelihood])
+        
+        % label
+        title('s03 Training data'),xlabel('Model'),ylabel('Average loglikelihood of one observation');
+        
+    % testing data %
+        subplot(1,3,2)
+    
+        % rename stuff and graph
+        names = categorical({'Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
+        names = reordercats(names,{'Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
+        bar(names, ...
+            [test.KnownVarianceLikelihood test.JeheeVarCovarLikelihood test.JeheeFullLikelihood test.RfOverlapLikelihood test.DistanceLikelihood test.OverlapDistanceLikelihood])
+        
+        % label
+        title('s03 Testing data'),xlabel('Model'),ylabel('Average loglikelihood of one observation');
+    
+    % plot the parameters %
+        subplot(1,3,3)
 
-% testing data
-subplot(1,3,2)
-names = categorical({'Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
-names = reordercats(names,{'Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
-bar(names, ...
-    [test.KnownVarianceLikelihood test.JeheeVarCovarLikelihood test.JeheeFullLikelihood test.RfOverlapLikelihood test.DistanceLikelihood test.OverlapDistanceLikelihood])
-
-title('s03 Testing data'),xlabel('Model'),ylabel('Average loglikelihood of one observation');
-
-subplot(1,3,3),
-names = categorical({'Single Term Rho','Full Jehee Rho','Full Jehee Sigma','Nu'});
-names = reordercats(names,{'Single Term Rho','Full Jehee Rho','Full Jehee Sigma','Nu'});
-bar(names, ...
-    [singleTermRho fullRho Sigma Nu])
-ylim([0 1]),title('parameter estimates')
-
-
-
+        %rename, graph, title
+        names = categorical({'Single Term Rho','Full Jehee Rho','Full Jehee Sigma','Nu'});
+        names = reordercats(names,{'Single Term Rho','Full Jehee Rho','Full Jehee Sigma','Nu'});
+        bar(names, [singleTermRho fullRho Sigma Nu])
+        ylim([0 1]),title('parameter estimates')
+        
 
 
     keyboard
