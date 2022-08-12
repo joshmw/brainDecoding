@@ -109,8 +109,8 @@ pdfMean = zeros(1,numVoxels);
     fullRho = params(1); Sigma = params(2)^2;
 
     % calc varCovar matrix as weighted sum of variance, covariance, and rf overlap
-    jeheeFullMatrix = nearestSPD( (1-fullRho)*covarianceMatrix.*eye(numVoxels) + fullRho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix );
-    minEig.jeheeFullMatrix = min( eig ((1-fullRho)*covarianceMatrix.*eye(numVoxels) + fullRho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix));
+    jeheeFullMatrix = nearestSPD( (1-fullRho-Sigma)*covarianceMatrix.*eye(numVoxels) + fullRho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix );
+    minEig.jeheeFullMatrix = min( eig ((1-fullRho-Sigma)*covarianceMatrix.*eye(numVoxels) + fullRho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix));
 
     % calc likelihood with the covariance matrix
     train.JeheeFullLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeFullMatrix));
@@ -190,7 +190,6 @@ pdfMean = zeros(1,numVoxels);
     test.OverlapDistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix*scaleByNumScans))
 
 
-keyboard
 
 %% Calculate AIC and BIC %%
     numObservations = size(pRFresidualtSeries,1);
@@ -247,12 +246,6 @@ keyboard
 
 
 
-
-
-keyboard
-
-
-
 %% Plot the results %%
 
     % training data %
@@ -262,10 +255,11 @@ keyboard
         names = categorical({'True var/covar','Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
         names = reordercats(names,{'True var/covar','Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
         bar(names, ...
-            [train.KnownVarCovarLikelihood train.KnownVarianceLikelihood train.JeheeVarCovarLikelihood train.JeheeFullLikelihood train.RfOverlapLikelihood train.DistanceLikelihood train.OverlapDistanceLikelihood])
+            [aicTrain.KnownVarCovar bicTrain.KnownVarCovar; aicTrain.KnownVariance bicTrain.KnownVariance; aicTrain.JeheeVarCovar bicTrain.JeheeVarCovar; ...
+             aicTrain.JeheeFull bicTrain.JeheeFull; aicTrain.RfOverlap bicTrain.RfOverlap; aicTrain.Distance bicTrain.Distance; aicTrain.OverlapDistance aicTrain.OverlapDistance])
         
         % label
-        title('s03 Training data'),xlabel('Model'),ylabel('Average loglikelihood of one observation');
+        title('s03 Training data'),xlabel('Model'),ylabel('Average loglikelihood of one observation'); legend('AIC','BIC');
         
     % testing data %
         subplot(1,3,2)
@@ -274,7 +268,8 @@ keyboard
         names = categorical({'Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
         names = reordercats(names,{'Variance Only','Variance + global covariance','Full Jehee Model','RF Overlap Model','Distance Model','Combined Distance RF Model'});
         bar(names, ...
-            [test.KnownVarianceLikelihood test.JeheeVarCovarLikelihood test.JeheeFullLikelihood test.RfOverlapLikelihood test.DistanceLikelihood test.OverlapDistanceLikelihood])
+            [aicTest.KnownVariance bicTest.KnownVariance; aicTest.JeheeVarCovar bicTest.JeheeVarCovar; ...
+             aicTest.JeheeFull bicTest.JeheeFull; aicTest.RfOverlap bicTest.RfOverlap; aicTest.Distance bicTest.Distance; aicTest.OverlapDistance aicTest.OverlapDistance])
         
         % label
         title('s03 Testing data'),xlabel('Model'),ylabel('Average loglikelihood of one observation');
@@ -283,24 +278,10 @@ keyboard
         subplot(1,3,3)
 
         %rename, graph, title
-        names = categorical({'Single Term Rho','Full Jehee Rho','Full Jehee Sigma','Nu'});
-        names = reordercats(names,{'Single Term Rho','Full Jehee Rho','Full Jehee Sigma','Nu'});
+        names = categorical({'Single Term Rho','Full Jehee Rho','Full Jehee Sigma','Nu'}); names = reordercats(names,{'Single Term Rho','Full Jehee Rho','Full Jehee Sigma','Nu'});
         bar(names, [singleTermRho fullRho Sigma Nu])
         ylim([0 1]),title('parameter estimates')
         
-
-
-    keyboard
-
-% fit variance? %
-    startparams = std(pRFresidualtSeries)*scaleByNumScans; minsearch = zeros(1,numVoxels); maxsearch = ones(1,numVoxels);
-
-    [params, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
-        lsqnonlin(@fitVariance,startparams,minsearch,maxsearch,opts,testpRFresidualtSeries,pdfMean,numVoxels); 
-        [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
-
-
-
 
 
 keyboard
@@ -425,7 +406,7 @@ function logLikelihood = getJeheeFullLikelihood(params,covarianceMatrix,numVoxel
     Rho = params(1); Sigma = params(2)^2;
 
     % calc varCovar matrix as a weighted sum (by covariance Rho) of variance and covariance matrices
-    jeheeFullMatrix = nearestSPD( (1-Rho)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix);
+    jeheeFullMatrix = nearestSPD( (1-Rho-Sigma)*covarianceMatrix.*eye(numVoxels) + Rho*covarianceMatrix + Sigma*rfOverlapMatrix.*covarianceMatrix);
 
     % calc likelihood with Jehee-inspired variance covariance matrix
     logLikelihood = 10^8-sum( logmvnpdf( pRFresidualtSeries, pdfMean, jeheeFullMatrix));
