@@ -26,7 +26,7 @@ function [train test] = noiseStruct(varargin)
 
 %% Set up data, matrices: residual correlations, rf overlap, distance, variance 
 % get the data
-getArgs(varargin);
+getArgs(varargin); subject = trainData(1:5);
 trainData = load(trainData);
 testData = load(testData);
 
@@ -49,7 +49,7 @@ figure,subplot(1,3,1);imshow(pRFresidualCorrMatrix);title('pRF residual correlat
 
 %% calculate log likelihoods of different models %%
 % get value to scale test covariance by number of scans
-scaleByNumScans = sqrt(numTrainScans)/sqrt(numTestScans);
+scaleByNumScans = sqrt(numTrainScans)/sqrt(numTestScans)
 
 % set zero mean values for logmvnpdf input
 pdfMean = zeros(1,numVoxels);
@@ -132,7 +132,7 @@ pdfMean = zeros(1,numVoxels);
     rfOverlapCovarMatrix = arrayfun(@(x1)getCorFromFit(x1,overlapCurveFit), rfOverlapMatrix);
 
     % adjust diagonal to 1 to keep variance
-    rfOverlapCovarMatrix = rfOverlapCovarMatrix - rfOverlapCovarMatrix.*eye(numVoxels) + eye(numVoxels);
+    rfOverlapCovarMatrix = nearestSPD(rfOverlapCovarMatrix - rfOverlapCovarMatrix.*eye(numVoxels) + eye(numVoxels));
 
     % multiply by the covar matrix
     rfOverlapVarCovarMatrix = nearestSPD(rfOverlapCovarMatrix .* covarianceMatrix);
@@ -158,7 +158,7 @@ pdfMean = zeros(1,numVoxels);
     distanceCovarMatrix = arrayfun(@(x1)getCorFromFit(x1,distanceCurveFit), distanceMatrix);
 
     % adjust diagonal to 1 to keep variance
-    distanceCovarMatrix = distanceCovarMatrix - distanceCovarMatrix.*eye(numVoxels) + eye(numVoxels);
+    distanceCovarMatrix = nearestSPD(distanceCovarMatrix - distanceCovarMatrix.*eye(numVoxels) + eye(numVoxels));
 
     % multiply by the covar matrix
     distanceVarCovarMatrix = nearestSPD(distanceCovarMatrix .* covarianceMatrix);
@@ -188,6 +188,20 @@ pdfMean = zeros(1,numVoxels);
     % calc likelihood with covariance matrix
     train.OverlapDistanceLikelihood = sum( logmvnpdf( pRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix))
     test.OverlapDistanceLikelihood = sum( logmvnpdf( testpRFresidualtSeries, pdfMean, overlapDistanceVarCovarMatrix*scaleByNumScans))
+
+
+%% Show the matrices %%
+figure;
+subplot(3,3,5); imshow(imshowScale(corr(testpRFresidualtSeries))); title('True residual var/covar matrix');
+subplot(3,3,1); imshow(imshowScale(trueVarCovarMatrix./covarianceMatrix)); title('First scan true var/covar matrix');
+subplot(3,3,2); imshow(imshowScale(eye(numVoxels))); title('Variance Only');
+subplot(3,3,3); imshow(imshowScale(jeheeVarCovarMatrix./covarianceMatrix)); title('Global Covariance');
+subplot(3,3,4); imshow(imshowScale(jeheeFullMatrix./covarianceMatrix)); title('Jehee Matrix');
+subplot(3,3,6), imshow(imshowScale(rfOverlapVarCovarMatrix./covarianceMatrix)); title('RF Overlap Fit Matrix');
+subplot(3,3,7); imshow(imshowScale(distanceVarCovarMatrix./covarianceMatrix)); title('distance Matrix');
+subplot(3,3,8); imshow(imshowScale(overlapDistanceVarCovarMatrix./covarianceMatrix)); title('Distance/Overlap fit matrix');
+set(gcf,'Position',[1442 -161 1328 958]);
+sgtitle(strcat(subject,' correlation matrices'));
 
 
 
@@ -259,7 +273,7 @@ pdfMean = zeros(1,numVoxels);
              aicTrain.JeheeFull bicTrain.JeheeFull; aicTrain.RfOverlap bicTrain.RfOverlap; aicTrain.Distance bicTrain.Distance; aicTrain.OverlapDistance aicTrain.OverlapDistance])
         
         % label
-        title('s03 Training data'),xlabel('Model'),ylabel('Average loglikelihood of one observation'); legend('AIC','BIC');
+        title(strcat(subject,' Training data')),xlabel('Model'),ylabel('Average loglikelihood of one observation'); legend('AIC','BIC');
         
     % testing data %
         subplot(1,3,2)
@@ -272,7 +286,7 @@ pdfMean = zeros(1,numVoxels);
              aicTest.JeheeFull bicTest.JeheeFull; aicTest.RfOverlap bicTest.RfOverlap; aicTest.Distance bicTest.Distance; aicTest.OverlapDistance aicTest.OverlapDistance])
         
         % label
-        title('s03 Testing data'),xlabel('Model'),ylabel('Average loglikelihood of one observation');
+        title(strcat(subject,' Testing data')),xlabel('Model'),ylabel('Average loglikelihood of one observation');
     
     % plot the parameters %
         subplot(1,3,3)
@@ -439,9 +453,9 @@ function logLikelihood = getOverlapDistanceLikelihood(params,pRFresidualtSeries,
 
 
 
-%%%%%%%%%%%%%%%%%%%%%%
-%% Function showFit %%
-%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%
+%% showFit %%
+%%%%%%%%%%%%%
 function showFit(x,y,fitToData,type)
 figure(1);
 
@@ -463,12 +477,12 @@ end
 
 
 
-%%%%%%%%%%%%%%%%%%%%%
-%% fitVariance %%
-function logLikelihood = fitVariance(params,testpRFresidualtSeries,pdfMean,numVoxels)
-
-varianceMatrix = nearestSPD((params' * params) .* eye(numVoxels));
-logLikelihood = 10^8 - sum(logmvnpdf( testpRFresidualtSeries, pdfMean, varianceMatrix));
+%%%%%%%%%%%%%%%%%
+%% imshowScale %%
+%%%%%%%%%%%%%%%%%
+% just a better version of rescale that multiplies the matrix by 1/avg(diag) so it's visible
+function outputMatrix = imshowScale(inputMatrix)
+outputMatrix = inputMatrix.*1/mean(diag(inputMatrix));
 
 
 
@@ -479,6 +493,14 @@ logLikelihood = 10^8 - sum(logmvnpdf( testpRFresidualtSeries, pdfMean, varianceM
 % OUTDATED HELPER FUNCTIONS %
 %~%~%~%~%~%~%~%~%~%~%~%~%~%~%
 % I don't call any of these but used them at some point. Keeping for documentation reasons, I guess.
+
+
+%%%%%%%%%%%%%%%%%%%%%
+%% fitVariance %%
+function logLikelihood = fitVariance(params,testpRFresidualtSeries,pdfMean,numVoxels)
+
+varianceMatrix = nearestSPD((params' * params) .* eye(numVoxels));
+logLikelihood = 10^8 - sum(logmvnpdf( testpRFresidualtSeries, pdfMean, varianceMatrix));
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
