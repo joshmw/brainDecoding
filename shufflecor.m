@@ -4,8 +4,8 @@
 %       Created: March 2022
 %
 %       Takes 2 scans and calculates the residual correlations between them. Used to show that voxels with overlapping receptive fields
-%       have correlated noise between different scans, where noise is completely independent.
-%
+%       have correlated noise between different scans, where noise is completely independent. 
+%       Thus, any correlations arise from model failure (both receptive field and hemodynamic response).
 %
 %       Example usage:
 %           shufflecor('data1=s0401mc12GaussianHdrNM','data2=s0401mc345GaussianHdrNM')       
@@ -102,8 +102,8 @@ v1NoiseCorArr = reshape(v1NoiseCor,[1 min(size(v1NoiseCor))*max(size(v1NoiseCor)
 v1NoiseCorArr(v1rfOverlapArr==1) = []; v1rfOverlapArr(v1rfOverlapArr==1) = [];
 
 figure(11); hold on; scatter(v1rfOverlapArr,v1NoiseCorArr,1,'filled','k');
-keyboard
-expFit = fit(v1rfOverlapArr',v1NoiseCorArr','exp2');
+
+expFit = fit(v1rfOverlapArr',v1NoiseCorArr','poly3');
 v1expFit = plot(expFit,'predobs'); for i = 1:3, v1expFit(i).Color = [0, 0.4470, 0.7410]; v1expFit(i).LineWidth = 2; end
 for i = 2:3, v1expFit(i).LineStyle = '--'; v1expFit(i).LineWidth = .75; end
 
@@ -122,7 +122,7 @@ v2NoiseCorArr(v2rfOverlapArr==1) = []; v2rfOverlapArr(v2rfOverlapArr==1) = [];
 
 figure(12); hold on; scatter(v2rfOverlapArr,v2NoiseCorArr,1,'filled','k');
 
-expFit = fit(v2rfOverlapArr',v2NoiseCorArr','exp2');
+expFit = fit(v2rfOverlapArr',v2NoiseCorArr','poly3');
 v2expFit = plot(expFit,'predobs'); for i = 1:3, v2expFit(i).Color = [0, 0.4470, 0.7410]; v2expFit(i).LineWidth = 2; end
 for i = 2:3, v2expFit(i).LineStyle = '--'; v2expFit(i).LineWidth = .75; end
 
@@ -141,7 +141,7 @@ v3NoiseCorArr(v3rfOverlapArr==1) = []; v3rfOverlapArr(v3rfOverlapArr==1) = [];
 
 figure(13); hold on; scatter(v3rfOverlapArr,v3NoiseCorArr,1,'filled','k');
 
-expFit = fit(v3rfOverlapArr',v3NoiseCorArr','exp2');
+expFit = fit(v3rfOverlapArr',v3NoiseCorArr','poly3');
 v3expFit = plot(expFit,'predobs'); for i = 1:3, v3expFit(i).Color = [0, 0.4470, 0.7410]; v3expFit(i).LineWidth = 2; end
 for i = 2:3, v3expFit(i).LineStyle = '--'; v3expFit(i).LineWidth = .75; end
 
@@ -152,6 +152,8 @@ drawPublishAxis('labelFontSize=14');
 leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.6 0.2 0.2685 0.1003];
 
 
-keyboard
 
+%%%%%%%%%%%%%%%%%%%
+%% END OF SCRIPT %%
+%%%%%%%%%%%%%%%%%%%
 
