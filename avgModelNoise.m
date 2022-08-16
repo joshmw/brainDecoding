@@ -3,16 +3,14 @@
 %       By: Josh Wilson
 %       Created: June 2022
 %
-%   Look at noise characteristics by using a mean model from another scan. Requires 2 scans (averages of scans) as input.
+%   This script is supposed to show that there isn't stimulus-driven multiplicative noise in fmri - that the data
+%   aren't noisier when there is a signal present or the voxel is reponding. You can get the log likelihood of the data by fitting some
+%   baseline variance and a scaling parameter that lets the variance vary as a function of the signal-RF overlap. The model best fits the data
+%   when that extra parameter is 0 - meaning that the voxel isn't more or less noisy when there is stimulus overlap.
 %
 %   The data2 input is the mean model; data1 is the true time series. You can set r2 cutoffs (and other stuff) in the script.
 %
-%
-%
-%
-%
-%
-%   Usage: [scanA, scanB, additiveFit, fullFit] = avgModelNoise('data1=s0401mc12hrfFit.mat','data2=s0401mc345hrfFit.mat');
+%   Usage: [scanA, scanB, additiveFit, fullFit] = avgModelNoise('data1=s0423mc678GaussianHdrNM.mat','data2=s0423mc12345GaussianHdrNM.mat');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 function [scanA, scanB, additiveFit, fullFit] = avgModelNoise(varargin);       
@@ -28,7 +26,7 @@ getArgs(varargin);
 load(data1); cleanRoisA = rois;
 load(data2); cleanRoisB = rois;
 roiNames = {'V1';'V2';'V3'};
-correctSignalChangeScale = 1;
+correctSignalChangeScale = 0;
 
 
 %% Clean Data %%
@@ -68,7 +66,7 @@ end
 startparams(1) = 1;
 opts = optimset('display','off','maxIter',1000000,'MaxFunEvals',1000000,'DiffMinChange',0);
 minsearch = [0]; maxsearch = [inf];
-multiplicativeScales = -1:.25:1;
+multiplicativeScales = -1:.5:1;
 
 % go through each roi and voxel individually
 for roi = 1:length(scanA)
@@ -190,7 +188,7 @@ for voxel = 1:scanA(roi).nVoxels;
          [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
 
     % save the parameters, likelihoods, exit flag, jacobian
-    fullFit(roi).parameters{voxel} = params; fullFit(roi).resnorms{voxel} = resnorm; fullFit(roi).residual{voxel} = residual(1)-1000; fullFit(roi).exitflag{voxel} = exitflag; fullFit(roi).output{voxel} = output; fullFit(roi).lambda{voxel} = lambda; fullFit(roi).jacobian{voxel} = jacobian;
+    fullFit(roi).parameters{voxel} = params; fullFit(roi).resnorms{voxel} = resnorm; fullFit(roi).residual{voxel} = residual(1)-100000; fullFit(roi).exitflag{voxel} = exitflag; fullFit(roi).output{voxel} = output; fullFit(roi).lambda{voxel} = lambda; fullFit(roi).jacobian{voxel} = jacobian;
 end %voxel iteration
 end %roi iteration  
 
@@ -297,6 +295,6 @@ multiplicativeNoiseSeries = multiplicativeNoiseScale*(scanA(roi).pRFtSeries(voxe
 noiseStdTimeSeries = additiveNoiseStd*ones(1,timeSeriesLength) + multiplicativeNoiseSeries;
 
 % compute the likelihood of each residual time point %
-logLikelihood = sum(-log(normpdf(residualTSeries,0,noiseStdTimeSeries)))+1000;
+logLikelihood = sum(-log(normpdf(residualTSeries,0,noiseStdTimeSeries)))+100000;
 
 
