@@ -8,6 +8,9 @@
 %   baseline variance and a scaling parameter that lets the variance vary as a function of the signal-RF overlap. The model best fits the data
 %   when that extra parameter is 0 - meaning that the voxel isn't more or less noisy when there is stimulus overlap.
 %
+%   The scaling parameter values you test are held in the "multiplicativeScales" variable. If you want a publication graph, set
+%   that really high (500 values or so) otherwise just set like 5 or else it takes forever and the file is like 10 GB.
+%
 %   The data2 input is the mean model; data1 is the true time series. You can set r2 cutoffs (and other stuff) in the script.
 %
 %   Usage: [scanA, scanB, additiveFit, fullFit] = avgModelNoise('data1=s0423mc678GaussianHdrNM.mat','data2=s0423mc12345GaussianHdrNM.mat');
@@ -54,7 +57,6 @@ scanA(roi).r2min = r2min; scanB(roi).r2min = r2min;
 end
 
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Multiplicative noise fitting %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -66,7 +68,7 @@ end
 startparams(1) = 1;
 opts = optimset('display','off','maxIter',1000000,'MaxFunEvals',1000000,'DiffMinChange',0);
 minsearch = [0]; maxsearch = [inf];
-multiplicativeScales = -1:.5:1;
+multiplicativeScales = -1:.025:1;
 
 % go through each roi and voxel individually
 for roi = 1:length(scanA)
@@ -79,7 +81,7 @@ for voxel = 1:scanA(roi).nVoxels;
          lsqnonlin(@fitNoiseParameters,startparams(1),minsearch(1),maxsearch(1),opts,scanA,scanB,voxel,roi,0,1,multiplicativeScale);
 
     % save the parameters, likelihoods, exit flag, jacobian
-    additiveFit(roi).parameters{voxel}{iteration} = params; additiveFit(roi).resnorms{voxel}{iteration} = resnorm; additiveFit(roi).residual{voxel}{iteration} = residual(1)-1000; additiveFit(roi).exitflag{voxel}{iteration} = exitflag; additiveFit(roi).output{voxel}{iteration} = output; additiveFit(roi).lambda{voxel}{iteration} = lambda; additiveFit(roi).jacobian{voxel}{iteration} = jacobian;
+    additiveFit(roi).parameters{voxel}{iteration} = params; additiveFit(roi).resnorms{voxel}{iteration} = resnorm; additiveFit(roi).residual{voxel}{iteration} = residual(1)-10000; additiveFit(roi).exitflag{voxel}{iteration} = exitflag; additiveFit(roi).output{voxel}{iteration} = output; additiveFit(roi).lambda{voxel}{iteration} = lambda; additiveFit(roi).jacobian{voxel}{iteration} = jacobian;
     iteration = iteration+1;
     end %scales
 end %voxels
@@ -95,7 +97,7 @@ for roi = 1:length(scanA)
 subplot(1,length(scanA),roi); averageResiduals = 0; hold on;
 
 % start count for total graphed voxels and set the r2 cutoff you want to graph
-graphMinCutoff = .6; graphMaxCutoff=1; totalGraphedVoxels = 0;
+graphMinCutoff = .2; graphMaxCutoff=1; totalGraphedVoxels = 0;
 
 % plot voxels with r2 greater than graphCutoff and tally number of plotted voxels
 for voxel = 1:scanA(roi).nVoxels
@@ -105,10 +107,12 @@ for voxel = 1:scanA(roi).nVoxels
        (scanA(roi).r2(voxel) < graphMaxCutoff & scanB(roi).r2(voxel) < graphMaxCutoff))
 
         % if so, plot 
-        plot(additiveFit(roi).multiplicativeScales,cell2mat(additiveFit(roi).residual{voxel}),'lineWidth',1,'color',[1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4 1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4  1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4])
+        zerovalue = cell2mat(additiveFit(roi).residual{voxel});
+        zerovalue = zerovalue(round(length(zerovalue)/2));
+        plot(additiveFit(roi).multiplicativeScales,cell2mat(additiveFit(roi).residual{voxel})-zerovalue,'lineWidth',1,'color',[1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4 1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4  1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4])
         
         % add to average residual
-        averageResiduals = averageResiduals + cell2mat(additiveFit(roi).residual{voxel});
+        averageResiduals = averageResiduals + cell2mat(additiveFit(roi).residual{voxel})-zerovalue;
         totalGraphedVoxels = totalGraphedVoxels+1;
 
     end %cutoff check
@@ -116,7 +120,9 @@ end %voxel iteration
 
 % plot the average 
 plot(additiveFit(roi).multiplicativeScales,averageResiduals/totalGraphedVoxels,'lineWidth',4,'color',[0 0 0])
-xlabel('Multiplicative Noise Scale'),ylabel('Log Likelihood'),title(sprintf('%s Log likelihoods with fit additive noise',roiNames{roi})),
+xlabel('Multiplicative Noise Scale'),ylabel('Log likelihood difference from 0 scale'),title(sprintf('%s Log likelihoods',roiNames{roi})),
+plot([min(additiveFit(1).multiplicativeScales) max(additiveFit(1).multiplicativeScales)],[0 0],'r');
+drawPublishAxis('labelFontSize=14');
 end
 
 
@@ -256,9 +262,91 @@ end %roi iteration
 
 
 
+%%%%%%%%%%%%%%%%%%%%%%%
+%% Temporal dynamics %%
+%%%%%%%%%%%%%%%%%%%%%%%
+
+previousMeasurementWeights = -1:.025:1;
+
+% go through each roi and voxel individually
+for roi = 1:length(scanA)
+for voxel = 1:scanA(roi).nVoxels;
+    iteration = 1;
+
+    % go through the multiplicative scales and fit the additive noise component to find log likelihood
+    for previousMeasurementWeight = previousMeasurementWeights;
+
+        % get residual T series as mean model Tseries - measured single Tseries
+        residualTSeries = scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:);
+
+        %cut off first value
+        residualTSeriesX = residualTSeries(2:240);
+
+        %Mu value is the same as X value but 1 earler
+        residualTSeriesMu = residualTSeries(1:239);
+
+        % compute the likelihood of each residual time point %
+        logLikelihood = sum(-log(normpdf(residualTSeriesX,previousMeasurementWeight*residualTSeriesMu,std(residualTSeries))));
+
+
+    % save the likelihood
+    temporalShift(roi).likelihood{voxel}{iteration} = logLikelihood; 
+    iteration = iteration+1;
+    end %scales
+
+end %voxels
+temporalShift(roi).previousMeasurementWeights = previousMeasurementWeights;
+end %rois
+
+
+%% graph the log likelihoods for each voxel at each weight%%
+figure
+
+% go through every roi
+for roi = 1:length(scanA)
+subplot(1,length(scanA),roi); averageResiduals = 0; hold on;
+
+% start count for total graphed voxels and set the r2 cutoff you want to graph
+graphMinCutoff = .2; graphMaxCutoff=1; totalGraphedVoxels = 0;
+
+% plot voxels with r2 greater than graphCutoff and tally number of plotted voxels
+for voxel = 1:scanA(roi).nVoxels
+
+    %check if over min and under max r2 cutoffs
+    if ((scanA(roi).r2(voxel) > graphMinCutoff & scanB(roi).r2(voxel) > graphMinCutoff) & ...
+       (scanA(roi).r2(voxel) < graphMaxCutoff & scanB(roi).r2(voxel) < graphMaxCutoff))
+
+        % if so, plot 
+        zerovalue = cell2mat(temporalShift(roi).likelihood{voxel});
+        zerovalue = zerovalue(round(length(zerovalue)/2));
+        plot(temporalShift(roi).previousMeasurementWeights,cell2mat(temporalShift(roi).likelihood{voxel})-zerovalue,'lineWidth',1,'color',[1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4 1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4  1-(scanA(roi).r2(voxel)+scanB(roi).r2(voxel))/4])
+        
+        % add to average residual
+        averageResiduals = averageResiduals + cell2mat(temporalShift(roi).likelihood{voxel})-zerovalue;
+        totalGraphedVoxels = totalGraphedVoxels+1;
+
+    end %cutoff check
+end %voxel iteration
+
+% plot the average 
+plot(temporalShift(roi).previousMeasurementWeights,averageResiduals/totalGraphedVoxels,'lineWidth',4,'color',[0 0 0])
+xlabel('Weight of t-1 noise value'),ylabel('Log likelihood difference from 0 weight'),title(sprintf('%s Log likelihoods',roiNames{roi})),
+plot([min(temporalShift(1).previousMeasurementWeights) max(temporalShift(1).previousMeasurementWeights)],[0 0],'r');
+drawPublishAxis('labelFontSize=14');
+end
 
 
 
+
+
+
+
+
+
+
+
+
+keyboard
 %% END OF SCRIPT %%
 
 
@@ -289,12 +377,12 @@ timeSeriesLength = scanA(roi).nFrames;
 residualTSeries = scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:);
 
 % calculated the multiplicative noise series scaled by the pRF-predicted response (zerod by min of prf prediction)
-multiplicativeNoiseSeries = multiplicativeNoiseScale*(scanA(roi).pRFtSeries(voxel,:)-min(scanA(roi).pRFtSeries(voxel,:)));
+shiftedpRFtSeries = (scanA(roi).pRFtSeries(voxel,:)-min(scanA(roi).pRFtSeries(voxel,:)));
+multiplicativeNoiseSeries = multiplicativeNoiseScale*shiftedpRFtSeries*std(residualTSeries)/(max(shiftedpRFtSeries));
 
 % calculate Std at every time point as a function of the model BOLD activity. Second term is a variance term, so take the sqrt (poisson mean-variance relationship) (took out for now)
 noiseStdTimeSeries = additiveNoiseStd*ones(1,timeSeriesLength) + multiplicativeNoiseSeries;
-
 % compute the likelihood of each residual time point %
-logLikelihood = sum(-log(normpdf(residualTSeries,0,noiseStdTimeSeries)))+100000;
+logLikelihood = sum(-log(normpdf(residualTSeries,0,noiseStdTimeSeries)))+10000;
 
 
