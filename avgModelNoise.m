@@ -11,9 +11,10 @@
 %   The scaling parameter values you test are held in the "multiplicativeScales" variable. If you want a publication graph, set
 %   that really high (500 values or so) otherwise just set like 5 or else it takes forever and the file is like 10 GB.
 %
-%   The data2 input is the mean model; data1 is the true time series. You can set r2 cutoffs (and other stuff) in the script.
+%   The data2 input is the mean model; data1 is the true time series; base is the original pRF you are using for cutoffs. This script finds which
+%   voxels the original pRF puts in the original cleanRois for the base prf and uses those same voxels in the independent scans.
 %
-%   Usage: [scanA, scanB, additiveFit, fullFit] = avgModelNoise('data1=s0423mc678GaussianHdrNM.mat','data2=s0423mc12345GaussianHdrNM.mat');
+%   Usage: [scanA, scanB, additiveFit, fullFit] = avgModelNoise('data1=s0403mc345GaussianHdrNM.mat','data2=s0403mc12GaussianHdrNM.mat','base=s0403prf.mat');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 function [scanA, scanB, additiveFit, fullFit] = avgModelNoise(varargin);       
@@ -24,38 +25,71 @@ function [scanA, scanB, additiveFit, fullFit] = avgModelNoise(varargin);
 %% Prepare Data %%
 %%%%%%%%%%%%%%%%%%
 
-%% Load Data %%
+%%%%%%%%%%%%%%%
+%% Load data %%
+%%%%%%%%%%%%%%%
+
 getArgs(varargin);
-load(data1); cleanRoisA = rois;
-load(data2); cleanRoisB = rois;
+
+load(data1);
+roisA = rois;
+load(data2);
+roisB = rois;
+load(base,'rois','cleanRois');
+
+
+% get the other scan clean rois
+for roi = 1:length(rois)
+cleanRoisA(roi).vox.linearCoords = roisA(roi).vox.linearCoords(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.rfHalfWidth = roisA(roi).vox.rfHalfWidth(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.r2 = roisA(roi).vox.r2(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.polarAngle = roisA(roi).vox.polarAngle(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.eccentricity = roisA(roi).vox.eccentricity(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.tSeries = roisA(roi).vox.tSeries(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.measurementVar = roisA(roi).vox.measurementVar(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.baselineNoise = roisA(roi).vox.baselineNoise(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.x = roisA(roi).vox.params(1,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.y = roisA(roi).vox.params(2,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.rfstd = roisA(roi).vox.params(3,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.pRFtSeries = roisA(roi).vox.pRFtSeries(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).vox.scanCoords = roisA(roi).scanCoords(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisA(roi).nVoxels = length(cleanRoisA(roi).vox.linearCoords);
+cleanRoisA(roi).nFrames = length(cleanRoisA(roi).vox.pRFtSeries(:,1))
+end
+
+for roi = 1:length(rois)
+cleanRoisB(roi).vox.linearCoords = roisB(roi).vox.linearCoords(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.rfHalfWidth = roisB(roi).vox.rfHalfWidth(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.r2 = roisB(roi).vox.r2(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.polarAngle = roisB(roi).vox.polarAngle(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.eccentricity = roisB(roi).vox.eccentricity(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.tSeries = roisB(roi).vox.tSeries(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.measurementVar = roisB(roi).vox.measurementVar(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.baselineNoise = roisB(roi).vox.baselineNoise(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.x = roisB(roi).vox.params(1,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.y = roisB(roi).vox.params(2,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.rfstd = roisB(roi).vox.params(3,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.pRFtSeries = roisB(roi).vox.pRFtSeries(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).vox.scanCoords = roisB(roi).scanCoords(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
+cleanRoisB(roi).nVoxels = length(cleanRoisB(roi).vox.linearCoords);
+cleanRoisB(roi).nFrames = length(cleanRoisB(roi).vox.pRFtSeries(:,1))
+end
+
+
 roiNames = {'V1';'V2';'V3'};
-correctSignalChangeScale = 0;
 
-
-%% Clean Data %%
 for roi = 1:length(cleanRoisA)
-
-% set cutoffs
-r2min = .2;
-analysisCutoff = (cleanRoisA(roi).vox.r2 > r2min) & (cleanRoisB(roi).vox.r2 > r2min);
-
-% create new data structures with cutoff stats
-scanA(roi).r2 = cleanRoisA(roi).vox.r2(analysisCutoff); scanB(roi).r2 = cleanRoisB(roi).vox.r2(analysisCutoff);
-scanA(roi).tSeries = cleanRoisA(roi).vox.tSeries(:,analysisCutoff)'; scanB(roi).tSeries = cleanRoisB(roi).vox.tSeries(:,analysisCutoff)';
-scanA(roi).pRFtSeries = cleanRoisA(roi).vox.pRFtSeries(:,analysisCutoff)'; scanB(roi).pRFtSeries = cleanRoisB(roi).vox.pRFtSeries(:,analysisCutoff)';
-
-% correct the scale if needed
-if correctSignalChangeScale
-    scanA(roi).tSeries = scanA(roi).tSeries/100+1; scanB(roi).tSeries = scanB(roi).tSeries/100+1;
-    scanA(roi).pRFtSeries = scanA(roi).pRFtSeries/100+1; scanB(roi).pRFtSeries = scanB(roi).pRFtSeries/100+1;
+scanA(roi).r2 = cleanRoisA(roi).vox.r2; scanB(roi).r2 = cleanRoisB(roi).vox.r2;
+scanA(roi).tSeries = cleanRoisA(roi).vox.tSeries'; scanB(roi).tSeries = cleanRoisB(roi).vox.tSeries';
+scanA(roi).pRFtSeries = cleanRoisA(roi).vox.pRFtSeries'; scanB(roi).pRFtSeries = cleanRoisB(roi).vox.pRFtSeries';
+scanA(roi).x = cleanRoisA(roi).vox.x; scanB(roi).x = cleanRoisB(roi).vox.x;
+scanA(roi).y = cleanRoisA(roi).vox.y; scanB(roi).y = cleanRoisB(roi).vox.y;
+scanA(roi).std = cleanRoisA(roi).vox.rfstd; scanB(roi).std = cleanRoisB(roi).vox.rfstd;
+scanA(roi).nVoxels = cleanRoisA(roi).nVoxels;scanB(roi).nVoxels = cleanRoisB(roi).nVoxels;
+scanA(roi).nFrames = cleanRoisA(roi).nFrames;scanB(roi).nFrames = cleanRoisB(roi).nFrames;
 end
 
-% get number of voxels and number of frames
-scanA(roi).nFrames = cleanRoisA(roi).nFrames; scanB(roi).nFrames = cleanRoisB(roi).nFrames;
-scanA(roi).nVoxels = sum(analysisCutoff); scanB(roi).nVoxels = sum(analysisCutoff);
-scanA(roi).r2min = r2min; scanB(roi).r2min = r2min;
-end
-
+keyboard
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Multiplicative noise fitting %%
@@ -68,7 +102,7 @@ end
 startparams(1) = 1;
 opts = optimset('display','off','maxIter',1000000,'MaxFunEvals',1000000,'DiffMinChange',0);
 minsearch = [0]; maxsearch = [inf];
-multiplicativeScales = -1:.025:1;
+multiplicativeScales = -1:1:1;
 
 % go through each roi and voxel individually
 for roi = 1:length(scanA)
@@ -90,14 +124,14 @@ end %rois
 
 
 %% graph the log likelihoods for each voxel at each multi scale %%
-figure
+gcf = imgcf;
 
 % go through every roi
 for roi = 1:length(scanA)
 subplot(1,length(scanA),roi); averageResiduals = 0; hold on;
 
 % start count for total graphed voxels and set the r2 cutoff you want to graph
-graphMinCutoff = .2; graphMaxCutoff=1; totalGraphedVoxels = 0;
+graphMinCutoff = .6; graphMaxCutoff=1; totalGraphedVoxels = 0;
 
 % plot voxels with r2 greater than graphCutoff and tally number of plotted voxels
 for voxel = 1:scanA(roi).nVoxels
@@ -122,8 +156,11 @@ end %voxel iteration
 plot(additiveFit(roi).multiplicativeScales,averageResiduals/totalGraphedVoxels,'lineWidth',4,'color',[0 0 0])
 xlabel('Multiplicative Noise Scale'),ylabel('Log likelihood difference from 0 scale'),title(sprintf('%s Log likelihoods',roiNames{roi})),
 plot([min(additiveFit(1).multiplicativeScales) max(additiveFit(1).multiplicativeScales)],[0 0],'r');
-drawPublishAxis('labelFontSize=14');
+ylim([-10 60]);
+drawPublishAxis('labelFontSize=14');legend('off');
 end
+set(gcf,'renderer','Painters')
+set(gcf,'Position', [58.7375 5.22111111111111 30.8680555555556 20.6022222222222]);
 
 
 %% graph the std of the noise at binned activity levels %%
@@ -266,7 +303,7 @@ end %roi iteration
 %% Temporal dynamics %%
 %%%%%%%%%%%%%%%%%%%%%%%
 
-previousMeasurementWeights = -1:.025:1;
+previousMeasurementWeights = -1:1:1;
 
 % go through each roi and voxel individually
 for roi = 1:length(scanA)
@@ -300,7 +337,7 @@ end %rois
 
 
 %% graph the log likelihoods for each voxel at each weight%%
-figure
+gcf = imgcf;
 
 % go through every roi
 for roi = 1:length(scanA)
@@ -332,35 +369,219 @@ end %voxel iteration
 plot(temporalShift(roi).previousMeasurementWeights,averageResiduals/totalGraphedVoxels,'lineWidth',4,'color',[0 0 0])
 xlabel('Weight of t-1 noise value'),ylabel('Log likelihood difference from 0 weight'),title(sprintf('%s Log likelihoods',roiNames{roi})),
 plot([min(temporalShift(1).previousMeasurementWeights) max(temporalShift(1).previousMeasurementWeights)],[0 0],'r');
-drawPublishAxis('labelFontSize=14');
+drawPublishAxis('labelFontSize=14');legend('off');
 end
+set(gcf,'renderer','Painters')
+set(gcf,'Position', [58.7375 5.22111111111111 30.8680555555556 20.6022222222222]);
 
 
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Mean model correlations in different areas %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% rf overlap %%%
+roi = 1; for row = 1:length(scanA(roi).r2)
+    for column = 1:length(scanA(roi).r2)   
+        mu1 = 0; s1 = scanA(roi).std(column); s2 = scanA(roi).std(row);
+        mu2 = sqrt((scanA(roi).x(column)-scanA(roi).x(row))^2 + (scanA(roi).y(column)-scanA(roi).y(row))^2);
+        if mu1 == mu2 & s1 == s2; v1rfOverlap(row,column) = 1;else;
+        c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
+        v1rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
+    end
+end
+v1rfOverlap = v1rfOverlap.*100;
+
+% v2
+roi = 2; for row = 1:length(scanA(roi).r2)
+    for column = 1:length(scanA(roi).r2)   
+        mu1 = 0; s1 = scanA(roi).std(column); s2 = scanA(roi).std(row);
+        mu2 = sqrt((scanA(roi).x(column)-scanA(roi).x(row))^2 + (scanA(roi).y(column)-scanA(roi).y(row))^2);
+        if mu1 == mu2 & s1 == s2; v2rfOverlap(row,column) = 1;else;
+        c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
+        v2rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
+    end
+end
+v2rfOverlap = v2rfOverlap.*100;
+
+% v3
+roi = 3; for row = 1:length(scanA(roi).r2)
+    for column = 1:length(scanA(roi).r2)   
+        mu1 = 0; s1 = scanA(roi).std(column); s2 = scanA(roi).std(row);
+        mu2 = sqrt((scanA(roi).x(column)-scanA(roi).x(row))^2 + (scanA(roi).y(column)-scanA(roi).y(row))^2);
+        if mu1 == mu2 & s1 == s2; v3rfOverlap(row,column) = 1;else;
+        c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
+        v3rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
+    end
+end
+v3rfOverlap = v3rfOverlap.*100;
+
+%v1 v3
+ for row = 1:length(scanA(1).r2)
+    for column = 1:length(scanA(3).r2)   
+        mu1 = 0; s1 = scanA(3).std(column); s2 = scanA(1).std(row);
+        mu2 = sqrt((scanA(3).x(column)-scanA(1).x(row))^2 + (scanA(3).y(column)-scanA(1).y(row))^2);
+        if mu1 == mu2 & s1 == s2; v1v3rfOverlap(row,column) = 1;else;
+        c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
+        v1v3rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
+    end
+ end
+ v1v3rfOverlap = v1v3rfOverlap.*100;
+
+%% noise correlations %%
+% calculate noise correlations in scan A by subtracting the mean model of scan B
+v1NoiseCor = corr(scanA(1).tSeries'-scanB(1).tSeries');
+v2NoiseCor = corr(scanA(2).tSeries'-scanB(2).tSeries');
+v3NoiseCor = corr(scanA(3).tSeries'-scanB(3).tSeries');
+v1v3NoiseCor = corr(scanA(1).tSeries'-scanB(1).tSeries',scanA(3).tSeries'-scanB(3).tSeries');
 
 
 
+%% graph %%
+% first, do v1 %
+v1rfOverlapArr = reshape(v1rfOverlap,[1 length(v1rfOverlap)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
+[v1rfOverlapArr,sortOrder] = sort(v1rfOverlapArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
+
+v1NoiseCorArr(v1rfOverlapArr==100) = []; v1rfOverlapArr(v1rfOverlapArr==100) = [];
+
+figure(11); hold on; scatter(v1rfOverlapArr,v1NoiseCorArr,1,'filled','k');
+
+%bootstrap
+getFitConfidenceInterval(v1NoiseCorArr',v1rfOverlapArr');
+
+expFit = fit(v1rfOverlapArr',v1NoiseCorArr','exp1');
+legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
+v1expFit = plot(expFit); v1expFit.Color = [0, 0.4470, 0.7410]; v1expFit.LineWidth = 2;
+%confidence internal
+confInt = confint(expFit);
+lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
+fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
+
+legend('Exponential Fit');
+title('V1 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)'); ylim([-.4 1]);
+
+drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+
+leg = legend([v1expFit legendColor],'Exponential Fit', 'Bootstrapped Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+
+% second, do v2 %
+v2rfOverlapArr = reshape(v2rfOverlap,[1 length(v2rfOverlap)^2]); v2NoiseCorArr = reshape(v2NoiseCor,[1 length(v2NoiseCor)^2]);
+[v2rfOverlapArr,sortOrder] = sort(v2rfOverlapArr); v2NoiseCorArr = v2NoiseCorArr(sortOrder);
+
+v2NoiseCorArr(v2rfOverlapArr==100) = []; v2rfOverlapArr(v2rfOverlapArr==100) = [];
+
+figure(12); hold on; scatter(v2rfOverlapArr,v2NoiseCorArr,1,'filled','k');
+
+%bootstrap
+getFitConfidenceInterval(v2NoiseCorArr',v2rfOverlapArr');
+
+expFit = fit(v2rfOverlapArr',v2NoiseCorArr','exp1');
+legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
+v2expFit = plot(expFit); v2expFit.Color = [0, 0.4470, 0.7410]; v2expFit.LineWidth = 2;
+%confidence internal
+confInt = confint(expFit);
+lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
+fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
+
+legend('Exponential Fit');
+title('V2 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)');ylim([-.4 1]);
+
+drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+
+leg = legend([v2expFit legendColor],'Exponential Fit', 'Bootstrapped Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+
+% third, do v3 %
+v3rfOverlapArr = reshape(v3rfOverlap,[1 length(v3rfOverlap)^2]); v3NoiseCorArr = reshape(v3NoiseCor,[1 length(v3NoiseCor)^2]);
+[v3rfOverlapArr,sortOrder] = sort(v3rfOverlapArr); v3NoiseCorArr = v3NoiseCorArr(sortOrder);
+
+v3NoiseCorArr(v3rfOverlapArr==100) = []; v3rfOverlapArr(v3rfOverlapArr==100) = [];
+
+figure(13); hold on; scatter(v3rfOverlapArr,v3NoiseCorArr,1,'filled','k');
+
+%bootstrap
+getFitConfidenceInterval(v3NoiseCorArr',v3rfOverlapArr');
+
+expFit = fit(v3rfOverlapArr',v3NoiseCorArr','exp1');
+legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
+v3expFit = plot(expFit); v3expFit.Color = [0, 0.4470, 0.7410]; v3expFit.LineWidth = 2;
+%confidence internal
+confInt = confint(expFit);
+lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
+fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
+
+legend('Exponential Fit');
+title('V3 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)');ylim([-.4 1]);
+
+drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+
+leg = legend([v3expFit legendColor],'Exponential Fit', 'Bootstrapped Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+
+%between v1 and v3
+v1v3rfOverlapArr = reshape(v1v3rfOverlap,[1 min(size(v1v3rfOverlap))*max(size(v1v3rfOverlap))]);
+v1v3NoiseCorArr = reshape(v1v3NoiseCor,[1 min(size(v1v3NoiseCor))*max(size(v1v3NoiseCor))]);
+[v1v3rfOverlapArr,sortOrder] = sort(v1v3rfOverlapArr); v1v3NoiseCorArr = v1v3NoiseCorArr(sortOrder);
+
+v1v3NoiseCorArr(v1v3rfOverlapArr==100) = []; v1v3rfOverlapArr(v1v3rfOverlapArr==100) = [];
+
+v1v3NoiseCorArr(isnan(v1v3rfOverlapArr))=[];
+v1v3rfOverlapArr(isnan(v1v3rfOverlapArr))=[];
+
+figure(15); hold on; scatter(v1v3rfOverlapArr,v1v3NoiseCorArr,1,'filled','k');
+
+getFitConfidenceInterval(v1v3NoiseCorArr',v1v3rfOverlapArr');
+
+expFit = fit(v1v3rfOverlapArr',v1v3NoiseCorArr','exp1');
+legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
+v1v3expFit = plot(expFit); v1v3expFit.Color = [0, 0.4470, 0.7410]; v1v3expFit.LineWidth = 2;
+%confidence internal
+confInt = confint(expFit);
+lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
+fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
+
+legend('Exponential Fit');
+title('V1/V3 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)');ylim([-.4 1]);
+
+drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+
+leg = legend([v1v3expFit legendColor],'Exponential Fit', 'Bootstrapped Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
 
 
 
 
 
 keyboard
-%% END OF SCRIPT %%
-
-
-
-
-
-
-
-
-
 
 
 
 %% helper functions %%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% getFitConfidenceInterval %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function getFitConfidenceInterval(correlationArray,overlapArray);
+
+numBootstraps = 50;
+
+expFitA = zeros(1,numBootstraps); expFitB = zeros(1,numBootstraps); expFitMax = zeros(1,numBootstraps);
+
+for bootstrap = 1:numBootstraps;
+    shuffledOverlap = overlapArray(randperm(length(overlapArray)));
+    expFit = fit(shuffledOverlap,correlationArray,'exp1');
+    expFitA(bootstrap) = expFit.a;
+    expFitB(bootstrap) = expFit.b;
+    expFitMax(bootstrap) = expFit.a*exp(expFit.b);
+    
+    legend('off');
+    shuffleFit = plot(expFit);
+    shuffleFit.Color = [.3, .5, .3 .05]; shuffleFit.LineWidth = 3;
+
+end
+
+[expFitA, sortOrder] = sort(expFitA);
+expFitB = expFitB(sortOrder);
+expFitMax = expFitMax(sortOrder);
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%
