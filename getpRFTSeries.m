@@ -10,7 +10,7 @@
 % certain cutoffs you can define like r2, RF width, etc). Need to do unless you have structures saved already.
 % 
 % Part 2: Takes the cleanROIs data and graphs things like RF overlap, distance, noise correlations between voxels. If you 
-% don't want to do this (ex. you just want to save the data), you can set "graphStuff = 0". But might as well graph if extracting for first time.
+% don't want to do this (ex. you just want to save the data), you can set "doAnalyses = 0". But might as well graph if extracting for first time.
 %
 %   Arguments you probably want to pass in:
 %
@@ -32,14 +32,16 @@
 %       
  
 
-function [rois cleanRois] = getpRFtSeries(varargin)       
+%function [rois cleanRois] = getpRFtSeries(varargin)      
+function [v1v3Exponent v1v3ExponentConfInt] = getpRFtSeries(varargin)
 
 %%%%%%%%%%%%%%%%%%%
 %% Get Arguments %%
 %%%%%%%%%%%%%%%%%%%
 
-loadData = 0; % default to extracting data from mrTools.
-getArgs(varargin); graphStuff = 1;
+loadData = 1; % default to extracting data from mrTools.
+getArgs(varargin); doAnalyses = 1;
+if ~exist('graphStuff');graphStuff=0;end
 
 
 if ~loadData % this is part 1 described above where you extract voxel data from mrTools if you don't have it saved already. 
@@ -153,17 +155,17 @@ end %done extracting data
 
 % if you already have roi + CleanRoi data, load it here.
 if loadData
-load(data);
+load(data,'rois','cleanRois');
 end
 
 
 % Start of part 2 (calculating correlations, distances, then graphing).
 %%%%%%%%%%%%%%%%
 %% RF Overlap %%
-%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%s
 
 % receptive field overlaps %
-sprintf('Correlation RFs and calculating distances (takes about a minute)...')
+sprintf('Correlating RFs and calculating distances (takes about a minute)...')
 
 %v1
 roi = 1; for row = 1:length(cleanRois(roi).vox.linearCoords)
@@ -175,6 +177,7 @@ roi = 1; for row = 1:length(cleanRois(roi).vox.linearCoords)
         v1rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
 end
+v1rfOverlap = v1rfOverlap.*100;
 
 % v2 %
 roi = 2; for row = 1:length(cleanRois(roi).vox.linearCoords)
@@ -186,7 +189,9 @@ roi = 2; for row = 1:length(cleanRois(roi).vox.linearCoords)
         v2rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
 end
+v2rfOverlap = v2rfOverlap.*100;
 
+%v3
 roi = 3; for row = 1:length(cleanRois(roi).vox.linearCoords)
     for column = 1:length(cleanRois(roi).vox.linearCoords)       
         mu1 = 0; s1 = cleanRois(roi).vox.rfstd(column); s2 = cleanRois(roi).vox.rfstd(row);
@@ -197,29 +202,31 @@ roi = 3; for row = 1:length(cleanRois(roi).vox.linearCoords)
     end
 end
 
+v3rfOverlap = v3rfOverlap.*100;
+
 % v1/v2 
 for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
     for roi2vox = 1:length(cleanRois(2).vox.linearCoords)       
         mu1 = 0; s1 = cleanRois(1).vox.rfstd(roi1vox); s2 = cleanRois(2).vox.rfstd(roi2vox);
         mu2 = sqrt((cleanRois(1).vox.x(roi1vox)-cleanRois(2).vox.x(roi2vox))^2 + (cleanRois(1).vox.y(roi1vox)-cleanRois(2).vox.y(roi2vox))^2);
-        if mu1 == mu2 & s1 == s2; v3rfOverlap(roi1vox,roi2vox) = 1;else;
+        if mu1 == mu2 & s1 == s2; v1v2rfOverlap(roi1vox,roi2vox) = 1;else;
         c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
         v1v2rfOverlap(roi1vox,roi2vox) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
 end
-v1v2rfOverlap = transpose(v1v2rfOverlap);
+v1v2rfOverlap = transpose(v1v2rfOverlap).*100;
 
 % v1/v3
 for roi1vox = 1:length(cleanRois(1).vox.linearCoords)
     for roi2vox = 1:length(cleanRois(3).vox.linearCoords)
         mu1 = 0; s1 = cleanRois(1).vox.rfstd(roi1vox); s2 = cleanRois(3).vox.rfstd(roi2vox);
         mu2 = sqrt((cleanRois(1).vox.x(roi1vox)-cleanRois(3).vox.x(roi2vox))^2 + (cleanRois(1).vox.y(roi1vox)-cleanRois(3).vox.y(roi2vox))^2);
-        if mu1 == mu2 & s1 == s2; v3rfOverlap(roi1vox,roi2vox) = 1;else;
+        if mu1 == mu2 & s1 == s2; v1v3rfOverlap(roi1vox,roi2vox) = 1;else;
         c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
         v1v3rfOverlap(roi1vox,roi2vox) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
 end
-v1v3rfOverlap = transpose(v1v3rfOverlap);
+v1v3rfOverlap = transpose(v1v3rfOverlap).*100;
 
 
 %%%%%%%%%%%%%%%%%%%%%%
@@ -283,170 +290,296 @@ v3tSeriesCor = corrcoef(cleanRois(3).vox.pRFtSeries);
 v1v3tSeriesCor = transpose(corr(cleanRois(1).vox.pRFtSeries,cleanRois(3).vox.pRFtSeries));        
 
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%% graph %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-if graphStuff
+if doAnalyses
 sprintf('Graphing things (also takes about a minute)...')   
 
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% plot noise by slope of pRF %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-doslope = 0
-if doslope
-for roi = 1:length(cleanRois)
-    
-    allNoise = []; allSlope = []; n = []; s = []; % initialize arrays for later
-    
-    for voxel = 1:length(cleanRois(roi).vox.linearCoords)
-        
-    % get values you need %
-    noise = abs(cleanRois(roi).vox.baselineNoise(:,voxel)); 
-    prf = cleanRois(roi).vox.pRFtSeries(:,voxel); 
-    
-    % calculate slope time series %
-    slope = prf;
-    for elem = 2:239;
-        slope(elem) = (prf(elem+1) - prf(elem-1))/2;  
-    end
-    noise = noise(2:239)*100; slope = slope(2:239)*100; % remove first and last values
-    
-    % plot slopes %
-    figure(29); subplot(2,3,roi); hold on; scatter(prf(2:239),noise);
-    
-    % throw this voxel into group data %
-    for i = 1:length(noise); s(i) = slope(i); n(i) = noise(i);end;
-    allNoise = [allNoise n]; allSlope = [allSlope s];
-
-    end
-
-    % density plot %
-    subplot(2,3,roi+3); 
-    binscatter(allSlope,allNoise,'XLimits',[.1,10]); hold on; binscatter(allSlope,allNoise,'XLimits',[-10,-.1]);
-    title(sprintf('Residuals by slope of pRF model, %s',cleanRois(roi).name)); xlabel('Slope of pRF Model ([t+1] - [t-1])'); ylabel('Residual (% activity)');
-    
-    % fit/plot a curve to ROI-wide data %
-    subplot(2,3,roi);
-    P = polyfit(allSlope,allNoise,1); yfit = P(1)*allSlope+P(2);
-    hold on; plot(allSlope,yfit,'k-');
-    title(sprintf('Residuals by slope of pRF model, %s',cleanRois(roi).name))
-    xlabel('Slope of pRF Model ([t+1] - [t-1])');
-    ylabel('Residual (% activity)');
-    
-    % absolute slope value plot %
-    %subplot(3,3,roi+6); 
-    %binscatter(abs(allSlope),allNoise,'XLimits',[.1,10]);
-    %title(sprintf('Residuals by Absolute slope of pRF model, %s',cleanRois(roi).name)); xlabel('Absolute value slope of pRF Model ([t+1] - [t-1])'); ylabel('Residual (% activity)');
-
-end
-end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % noise and receptive field correlation %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % first, do v1 %
-
 v1rfOverlapArr = reshape(v1rfOverlap,[1 length(v1rfOverlap)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
 [v1rfOverlapArr,sortOrder] = sort(v1rfOverlapArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
 
-v1NoiseCorArr(v1rfOverlapArr==1) = []; v1rfOverlapArr(v1rfOverlapArr==1) = [];
+v1NoiseCorArr(v1rfOverlapArr==100) = []; v1rfOverlapArr(v1rfOverlapArr==100) = [];
 
 figure(11); hold on; scatter(v1rfOverlapArr,v1NoiseCorArr,1,'filled','k');
 
+%bootstrap
+[meanExponent stdExponent] = getFitConfidenceInterval(v1NoiseCorArr',v1rfOverlapArr',graphStuff);
+
+% plot the fit
 expFit = fit(v1rfOverlapArr',v1NoiseCorArr','exp1');
-v1expFit = plot(expFit,'predobs'); for i = 1:3, v1expFit(i).Color = [0, 0.4470, 0.7410]; v1expFit(i).LineWidth = 2; end
-for i = 2:3, v1expFit(i).LineStyle = '--'; v1expFit(i).LineWidth = .75; end
+legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
+v1expFit = plot(expFit); v1expFit.Color = [0, 0.4470, 0.7410]; v1expFit.LineWidth = 2;
+%confidence internal
+confInt = confint(expFit);
+lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
 
-legend('','Linear Fit', 'Exponential Fit');
-title('V1 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
+fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
+legend('Exponential Fit');
+title('V1 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)'); ylim([-.4 1]);
 
-drawPublishAxis('labelFontSize=14');
-leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.6 0.2 0.2685 0.1003];
+if graphStuff
+drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+leg = legend([v1expFit legendColor],'Exponential Fit', 'Permuted Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+end
 
 % second, do v2 %
 v2rfOverlapArr = reshape(v2rfOverlap,[1 length(v2rfOverlap)^2]); v2NoiseCorArr = reshape(v2NoiseCor,[1 length(v2NoiseCor)^2]);
 [v2rfOverlapArr,sortOrder] = sort(v2rfOverlapArr); v2NoiseCorArr = v2NoiseCorArr(sortOrder);
 
-v2NoiseCorArr(v2rfOverlapArr==1) = []; v2rfOverlapArr(v2rfOverlapArr==1) = [];
+v2NoiseCorArr(v2rfOverlapArr==100) = []; v2rfOverlapArr(v2rfOverlapArr==100) = [];
 
 figure(12); hold on; scatter(v2rfOverlapArr,v2NoiseCorArr,1,'filled','k');
 
+%bootstrap
+getFitConfidenceInterval(v2NoiseCorArr',v2rfOverlapArr',graphStuff);
 expFit = fit(v2rfOverlapArr',v2NoiseCorArr','exp1');
-v2expFit = plot(expFit,'predobs'); for i = 1:3, v2expFit(i).Color = [0, 0.4470, 0.7410]; v2expFit(i).LineWidth = 2; end
-for i = 2:3, v2expFit(i).LineStyle = '--'; v2expFit(i).LineWidth = .75; end
 
-legend('','Linear Fit', 'Exponential Fit');
-title('V2 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
+legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
+v2expFit = plot(expFit); v2expFit.Color = [0, 0.4470, 0.7410]; v2expFit.LineWidth = 2;
+%confidence internal
+confInt = confint(expFit);
+lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
+fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
 
-drawPublishAxis('labelFontSize=14');
-leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.6 0.2 0.2685 0.1003];
+legend('Exponential Fit');
+title('V2 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)');ylim([-.4 1]);
+
+if graphStuff
+drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+leg = legend([v2expFit legendColor],'Exponential Fit', 'Permuted Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+end
 
 % third, do v3 %
+
 v3rfOverlapArr = reshape(v3rfOverlap,[1 length(v3rfOverlap)^2]); v3NoiseCorArr = reshape(v3NoiseCor,[1 length(v3NoiseCor)^2]);
 [v3rfOverlapArr,sortOrder] = sort(v3rfOverlapArr); v3NoiseCorArr = v3NoiseCorArr(sortOrder);
 
-v3NoiseCorArr(v3rfOverlapArr==1) = []; v3rfOverlapArr(v3rfOverlapArr==1) = [];
+v3NoiseCorArr(v3rfOverlapArr==100) = []; v3rfOverlapArr(v3rfOverlapArr==100) = [];
 
 figure(13); hold on; scatter(v3rfOverlapArr,v3NoiseCorArr,1,'filled','k');
 
+%bootstrap
+getFitConfidenceInterval(v3NoiseCorArr',v3rfOverlapArr',graphStuff);
+
 expFit = fit(v3rfOverlapArr',v3NoiseCorArr','exp1');
-v3expFit = plot(expFit,'predobs'); for i = 1:3, v3expFit(i).Color = [0, 0.4470, 0.7410]; v3expFit(i).LineWidth = 2; end
-for i = 2:3, v3expFit(i).LineStyle = '--'; v3expFit(i).LineWidth = .75; end
+legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
+v3expFit = plot(expFit); v3expFit.Color = [0, 0.4470, 0.7410]; v3expFit.LineWidth = 2;
+%confidence internal
+confInt = confint(expFit);
+lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
+fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
 
-legend('','Linear Fit', 'Exponential Fit');
-title('V3 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
+legend('Exponential Fit');
+title('V3 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)');ylim([-.4 1]);
 
-drawPublishAxis('labelFontSize=14');
-leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.6 0.2 0.2685 0.1003];
+if graphStuff
+drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+leg = legend([v3expFit legendColor],'Exponential Fit', 'Permuted Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+end
 
 %between v1 and v2
 v1v2rfOverlapArr = reshape(v1v2rfOverlap,[1 min(size(v1v2rfOverlap))*max(size(v1v2rfOverlap))]);
 v1v2NoiseCorArr = reshape(v1v2NoiseCor,[1 min(size(v1v2NoiseCor))*max(size(v1v2NoiseCor))]);
 [v1v2rfOverlapArr,sortOrder] = sort(v1v2rfOverlapArr); v1v2NoiseCorArr = v1v2NoiseCorArr(sortOrder);
 
-v1v2NoiseCorArr(v1v2rfOverlapArr==1) = []; v1v2rfOverlapArr(v1v2rfOverlapArr==1) = [];
+v1v2NoiseCorArr(v1v2rfOverlapArr==100) = []; v1v2rfOverlapArr(v1v2rfOverlapArr==100) = [];
 
 figure(14); hold on; scatter(v1v2rfOverlapArr,v1v2NoiseCorArr,1,'filled','k');
 
+%bootstrap
+getFitConfidenceInterval(v1v2NoiseCorArr',v1v2rfOverlapArr',graphStuff);
 
 expFit = fit(v1v2rfOverlapArr',v1v2NoiseCorArr','exp1');
-v1v2expFit = plot(expFit,'predobs'); for i = 1:3, v1v2expFit(i).Color = [0, 0.4470, 0.7410]; v1v2expFit(i).LineWidth = 2; end
-for i = 2:3, v1v2expFit(i).LineStyle = '--'; v1v2expFit(i).LineWidth = .75; end
+legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
+v1v2expFit = plot(expFit); v1v2expFit.Color = [0, 0.4470, 0.7410]; v1v2expFit.LineWidth = 2;
+%confidence internal
+confInt = confint(expFit);
+lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
+fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
 
-legend('','Linear Fit', 'Exponential Fit');
-title('V1/V2 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
+legend('Exponential Fit');
+title('V1/V2 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)');ylim([-.4 1]);
 
-drawPublishAxis('labelFontSize=14');
-leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.6 0.2 0.2685 0.1003];
-
+if graphStuff
+drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+leg = legend([v1v2expFit legendColor],'Exponential Fit', 'Permuted Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+end
 
 %between v1 and v3
 v1v3rfOverlapArr = reshape(v1v3rfOverlap,[1 min(size(v1v3rfOverlap))*max(size(v1v3rfOverlap))]);
 v1v3NoiseCorArr = reshape(v1v3NoiseCor,[1 min(size(v1v3NoiseCor))*max(size(v1v3NoiseCor))]);
 [v1v3rfOverlapArr,sortOrder] = sort(v1v3rfOverlapArr); v1v3NoiseCorArr = v1v3NoiseCorArr(sortOrder);
 
-v1v3NoiseCorArr(v1v3rfOverlapArr==1) = []; v1v3rfOverlapArr(v1v3rfOverlapArr==1) = [];
+v1v3NoiseCorArr(v1v3rfOverlapArr==100) = []; v1v3rfOverlapArr(v1v3rfOverlapArr==100) = [];
 
 v1v3NoiseCorArr(isnan(v1v3rfOverlapArr))=[];
 v1v3rfOverlapArr(isnan(v1v3rfOverlapArr))=[];
 
 figure(15); hold on; scatter(v1v3rfOverlapArr,v1v3NoiseCorArr,1,'filled','k');
 
+%bootstrap
+[meanExponent stdExponent] = getFitConfidenceInterval(v1v3NoiseCorArr',v1v3rfOverlapArr',graphStuff);
+
 expFit = fit(v1v3rfOverlapArr',v1v3NoiseCorArr','exp1');
+legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
+v1v3expFit = plot(expFit); v1v3expFit.Color = [0, 0.4470, 0.7410]; v1v3expFit.LineWidth = 2;
+%confidence internal
+confInt = confint(expFit);
+lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
+fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
+
+%expFit = fit(v1v3rfOverlapArr',v1v3NoiseCorArr','a*exp(b*x)+c');
+v1v3Exponent = expFit.b;
+v1v3ExponentConfInt = confint(expFit);
+v1v3ExponentConfInt = v1v3ExponentConfInt(:,2);
+
+legend('Exponential Fit');
+title('V1/V3 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)');ylim([-.4 1]);
+
+if graphStuff
+drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+leg = legend([v1v3expFit legendColor],'Exponential Fit', 'Permuted Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+end
+
+
+
+
+
+end %%end doAnalyses
+
+
+
+
+
+dontdo = 0;if dontdo
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% distance and noise correlation %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% first, do v1 %
+
+v1distArr = reshape(v1dist,[1 length(v1dist)^2]); v1NoiseCorArr = reshape(v1NoiseCor,[1 length(v1NoiseCor)^2]);
+[v1distArr,sortOrder] = sort(v1distArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
+
+v1NoiseCorArr(v1distArr==0) = []; v1distArr(v1distArr==0) = [];
+
+figure(16); hold on; scatter(v1distArr,v1NoiseCorArr,1,'filled','k');
+
+expFit = fit(v1distArr',v1NoiseCorArr','exp1');
+v1expFit = plot(expFit,'predobs'); for i = 1:3, v1expFit(i).Color = [0, 0.4470, 0.7410]; v1expFit(i).LineWidth = 2; end
+for i = 2:3, v1expFit(i).LineStyle = '--'; v1expFit(i).LineWidth = .75; end
+
+legend('','Linear Fit', 'Exponential Fit');
+title('V1 Distance and Noise Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('Noise correlation between voxels i,j');
+
+drawPublishAxis('labelFontSize=14');
+leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.17 .77 0.2685 0.1003];
+
+% second, do v2 %
+v2distArr = reshape(v2dist,[1 length(v2dist)^2]); v2NoiseCorArr = reshape(v2NoiseCor,[1 length(v2NoiseCor)^2]);
+[v2distArr,sortOrder] = sort(v2distArr); v2NoiseCorArr = v2NoiseCorArr(sortOrder);
+
+v2NoiseCorArr(v2distArr==0) = []; v2distArr(v2distArr==0) = [];
+
+figure(17); hold on; scatter(v2distArr,v2NoiseCorArr,1,'filled','k');
+
+expFit = fit(v2distArr',v2NoiseCorArr','exp1');
+v2expFit = plot(expFit,'predobs'); for i = 1:3, v2expFit(i).Color = [0, 0.4470, 0.7410]; v2expFit(i).LineWidth = 2; end
+for i = 2:3, v2expFit(i).LineStyle = '--'; v2expFit(i).LineWidth = .75; end
+
+legend('','Linear Fit', 'Exponential Fit');
+title('V2 Distance and Noise Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('Noise correlation between voxels i,j');
+
+drawPublishAxis('labelFontSize=14');
+leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.17 .77 0.2685 0.1003];
+
+% third, do v3 %
+v3distArr = reshape(v3dist,[1 length(v3dist)^2]); v3NoiseCorArr = reshape(v3NoiseCor,[1 length(v3NoiseCor)^2]);
+[v3distArr,sortOrder] = sort(v3distArr); v3NoiseCorArr = v3NoiseCorArr(sortOrder);
+
+v3NoiseCorArr(v3distArr==0) = []; v3distArr(v3distArr==0) = [];
+
+figure(18); hold on; scatter(v3distArr,v3NoiseCorArr,1,'filled','k');
+
+expFit = fit(v3distArr',v3NoiseCorArr','exp1');
+v3expFit = plot(expFit,'predobs'); for i = 1:3, v3expFit(i).Color = [0, 0.4470, 0.7410]; v3expFit(i).LineWidth = 2; end
+for i = 2:3, v3expFit(i).LineStyle = '--'; v3expFit(i).LineWidth = .75; end
+
+legend('','Linear Fit', 'Exponential Fit');
+title('V3 Distance and Noise Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('Noise correlation between voxels i,j');
+
+drawPublishAxis('labelFontSize=14');
+leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.17 .77 0.2685 0.1003];
+
+
+
+%between v1 and v2
+v1v2distArr = reshape(v1v2dist,[1 min(size(v1v2dist))*max(size(v1v2dist))]); v1v2NoiseCorArr = reshape(v1v2NoiseCor,[1 min(size(v1v2NoiseCor))*max(size(v1v2NoiseCor))]);
+[v1v2distArr,sortOrder] = sort(v1v2distArr); v1v2NoiseCorArr = v1v2NoiseCorArr(sortOrder);
+
+v1v2NoiseCorArr(v1v2distArr==0) = []; v1v2distArr(v1v2distArr==0) = [];
+
+figure(19); hold on; scatter(v1v2distArr,v1v2NoiseCorArr,1,'filled','k');
+
+expFit = fit(v1v2distArr',v1v2NoiseCorArr','exp1');
+v1v2expFit = plot(expFit,'predobs'); for i = 1:3, v1v2expFit(i).Color = [0, 0.4470, 0.7410]; v1v2expFit(i).LineWidth = 2; end
+for i = 2:3, v1v2expFit(i).LineStyle = '--'; v1v2expFit(i).LineWidth = .75; end
+
+legend('','Linear Fit', 'Exponential Fit');
+title('V1 V2 Distance and Noise Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('Noise correlation between voxels i,j');
+
+drawPublishAxis('labelFontSize=14');
+leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.17 .77 0.2685 0.1003];
+
+
+
+%between v1 and v3
+v1v3distArr = reshape(v1v3dist,[1 min(size(v1v3dist))*max(size(v1v3dist))]); v1v3NoiseCorArr = reshape(v1v3NoiseCor,[1 min(size(v1v3NoiseCor))*max(size(v1v3NoiseCor))]);
+[v1v3distArr,sortOrder] = sort(v1v3distArr); v1v3NoiseCorArr = v1v3NoiseCorArr(sortOrder);
+
+v1v3NoiseCorArr(v1v3distArr==0) = []; v1v3distArr(v1v3distArr==0) = [];
+
+figure(20); hold on; scatter(v1v3distArr,v1v3NoiseCorArr,1,'filled','k');
+
+expFit = fit(v1v3distArr',v1v3NoiseCorArr','exp1');
 v1v3expFit = plot(expFit,'predobs'); for i = 1:3, v1v3expFit(i).Color = [0, 0.4470, 0.7410]; v1v3expFit(i).LineWidth = 2; end
 for i = 2:3, v1v3expFit(i).LineStyle = '--'; v1v3expFit(i).LineWidth = .75; end
 
 legend('','Linear Fit', 'Exponential Fit');
-title('V1/V3 Receptive Field and Noise Correlations'); xlabel('Receptive field overlap between voxels i,j (percent)'); ylabel('Noise correlation between voxels i,j');
-ylim([-.5 1]);
+title('V1 V3 Distance and Noise Correlations'); xlabel('Distance between voxels i,j (mm)'); ylabel('Noise correlation between voxels i,j');
+
 drawPublishAxis('labelFontSize=14');
-leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.6 0.2 0.2685 0.1003];
+leg = legend('','Exponential Fit', '95% Prediction bounds'); leg.Position = [0.17 .77 0.2685 0.1003];
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% old stuff i don't think is useful %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 %% distance vs rf cor %%
@@ -620,17 +753,9 @@ title('V3 Time Series and Noise Correlation'); xlabel('Time Series Correlation b
 
 
 end 
-end%%%%% end of graphing stuff
-
-keyboard
 
 
-dontdo = 0;if dontdo
 
-    
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% old stuff i don't think is useful %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
 
@@ -1118,7 +1243,7 @@ for bin = -1:.01:.99
 end
 
 plot(bins,noiseCorAvgs,'black','LineWidth',5);
-title('Receptive Field and Noise Correlations between v1 and v2'); xlabel('Receptive field correlation (voxel V1i, V2j)'); ylabel('Baseline time series correlation (voxel V1i, V2j)');
+title('residual correlations between v1 and v2'); xlabel('Receptive field correlation (voxel V1i, V2j)'); ylabel('Baseline time series correlation (voxel V1i, V2j)');
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1292,11 +1417,109 @@ end
 
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% plot noise by slope of pRF %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+doslope = 0
+if doslope
+for roi = 1:length(cleanRois)
+    
+    allNoise = []; allSlope = []; n = []; s = []; % initialize arrays for later
+    
+    for voxel = 1:length(cleanRois(roi).vox.linearCoords)
+        
+    % get values you need %
+    noise = abs(cleanRois(roi).vox.baselineNoise(:,voxel)); 
+    prf = cleanRois(roi).vox.pRFtSeries(:,voxel); 
+    
+    % calculate slope time series %
+    slope = prf;
+    for elem = 2:239;
+        slope(elem) = (prf(elem+1) - prf(elem-1))/2;  
+    end
+    noise = noise(2:239)*100; slope = slope(2:239)*100; % remove first and last values
+    
+    % plot slopes %
+    figure(29); subplot(2,3,roi); hold on; scatter(prf(2:239),noise);
+    
+    % throw this voxel into group data %
+    for i = 1:length(noise); s(i) = slope(i); n(i) = noise(i);end;
+    allNoise = [allNoise n]; allSlope = [allSlope s];
+
+    end
+
+    % density plot %
+    subplot(2,3,roi+3); 
+    binscatter(allSlope,allNoise,'XLimits',[.1,10]); hold on; binscatter(allSlope,allNoise,'XLimits',[-10,-.1]);
+    title(sprintf('Residuals by slope of pRF model, %s',cleanRois(roi).name)); xlabel('Slope of pRF Model ([t+1] - [t-1])'); ylabel('Residual (% activity)');
+    
+    % fit/plot a curve to ROI-wide data %
+    subplot(2,3,roi);
+    P = polyfit(allSlope,allNoise,1); yfit = P(1)*allSlope+P(2);
+    hold on; plot(allSlope,yfit,'k-');
+    title(sprintf('Residuals by slope of pRF model, %s',cleanRois(roi).name))
+    xlabel('Slope of pRF Model ([t+1] - [t-1])');
+    ylabel('Residual (% activity)');
+    
+    % absolute slope value plot %
+    %subplot(3,3,roi+6); 
+    %binscatter(abs(allSlope),allNoise,'XLimits',[.1,10]);
+    %title(sprintf('Residuals by Absolute slope of pRF model, %s',cleanRois(roi).name)); xlabel('Absolute value slope of pRF Model ([t+1] - [t-1])'); ylabel('Residual (% activity)');
+
+end
+end
+
+
+
 %end dontDo
 end
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%%% helper functions %%%%%%%
+
+function [meanExponent stdExponent] = getFitConfidenceInterval(correlationArray,overlapArray,graphStuff);
+
+numBootstraps = 50;
+
+expFitA = zeros(1,numBootstraps); expFitB = zeros(1,numBootstraps); expFitMax = zeros(1,numBootstraps);
+
+for bootstrap = 1:numBootstraps;
+    shuffledOverlap = overlapArray(randperm(length(overlapArray)));
+    expFit = fit(shuffledOverlap,correlationArray,'exp1');
+    expFitA(bootstrap) = expFit.a;
+    expFitB(bootstrap) = expFit.b;
+    expFitMax(bootstrap) = expFit.a*exp(expFit.b);
+    
+    legend('off');
+    if graphStuff
+        shuffleFit = plot(expFit);
+        shuffleFit.Color = [.3, .5, .3 .05]; shuffleFit.LineWidth = 2;
+    end
+end
+
+[expFitA, sortOrder] = sort(expFitA);
+expFitB = expFitB(sortOrder);
+expFitMax = expFitMax(sortOrder);
+
+meanExponent = mean(expFitB);
+stdExponent = std(expFitB);
 
 
