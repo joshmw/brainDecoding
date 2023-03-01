@@ -1,98 +1,56 @@
+%%%%%%%%%%%%%%%%%%%%%%%
+%% saveSumarryFigs.m %%
+%%%%%%%%%%%%%%%%%%%%%%%
+%
+% Uses the core noise correlation functions (getpRFTSeries, avgModelNoise, shufflecor) to compute summary statistics
+% for all of the subjects for which we have data. The main comparisons are:
+%
+%     Noise correlations using the prf model and the mean moddle
+%
+%     Noise correlations between different scans using the pRF model
+%
+%     Same comparisons but will different levels of filtering
+
+
+
+%Get the list of subjects - set this manually, stored in onedrive with getpRFTSeries format and naming convention
+subjectList = {'s0350', 's0399', 's0401', 's0403', 's0404', 's0405', 's0406', 's0416', 's0419', 's0420', 's0421' 's0423'}
+% Excluded subjects: 's0414',
+
+
+%% Get the exponents of the base rfOverlap/NoiseCor fit with the prf model %%
+%initialize empty arrays
 prfExponents = [];
 prfExponentConfLow = [];
 prfExponentConfHigh = [];
 
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0415mc1234GaussianNM.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0416mc1234GaussianNM.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0405mc1234GaussianNM.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0406mc1234GaussianNM.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0419mc1234GaussianNM.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0350mc1348GaussianNM.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0420mc1234GaussianNM.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0422mc1234GaussianNM.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0399prf.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0401prf.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0403prf.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0404prf.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
-
-[v1Exponent expConfInt] = getpRFTSeries('loadData=1','data=s0423mc12345GaussianHdrNM.mat'); close all;
-prfExponents = [prfExponents v1Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
+%for each subject, get the exponent of the exponential fit between v1 and v3
+for subject = 1:length(subjectList);
+    sprintf('Doing subject %i of %i',subject,length(subjectList))
+    dataStr =  strcat('data=', subjectList(subject), 'pRFGaussianHdrNMFull.mat');
+    [v1v3Exponent expConfInt] = getpRFTSeries('loadData=1',dataStr{1},'graphStuff=0'); close all;
+    prfExponents = [prfExponents v1v3Exponent]; prfExponentConfLow = [prfExponentConfLow expConfInt(1)]; prfExponentConfHigh = [prfExponentConfHigh expConfInt(2)];
+end
 
 
-% do the mean model
+%% Get the exponents using another scan as the model of scan 1 %
+% initialize empty arrays
 MMExponents = [];
 MMExponentConfLow = [];
 MMExponentConfHigh = [];
 
-[v1Exponent expConfInt] = avgModelNoise('data1=s0415mc12GaussianNM.mat','data2=s0415mc34GaussianNM.mat','base=s0415mc1234GaussianNM.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0416mc12GaussianNM.mat','data2=s0416mc34GaussianNM.mat','base=s0416mc1234GaussianNM.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0405mc12GaussianNM.mat','data2=s0405mc34GaussianNM.mat','base=s0405mc1234GaussianNM.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0406mc12GaussianNM.mat','data2=s0406mc34GaussianNM.mat','base=s0406mc1234GaussianNM.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0419mc12GaussianNM.mat','data2=s0419mc34GaussianNM.mat','base=s0419mc1234GaussianNM.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0350mc13GaussianNM.mat','data2=s0350mc48GaussianNM.mat','base=s0350mc1348GaussianNM.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0420mc12GaussianNM.mat','data2=s0420mc34GaussianNM.mat','base=s0420mc1234GaussianNM.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0422mc12GaussianNM.mat','data2=s0422mc34GaussianNM.mat','base=s0422mc1234GaussianNM.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0399mc345GaussianHdrNM.mat','data2=s0399mc12GaussianHdrNM.mat','base=s0399pRF.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0401mc345GaussianHdrNM.mat','data2=s0401mc12GaussianHdrNM.mat','base=s0401pRF.mat')
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0403mc345GaussianHdrNM.mat','data2=s0403mc12GaussianHdrNM.mat','base=s0403pRF.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0404mc345GaussianHdrNM.mat','data2=s0404mc12GaussianHdrNM.mat','base=s0404pRF.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-[v1Exponent expConfInt] = avgModelNoise('data1=s0423mc678GaussianHdrNM.mat','data2=s0423mc12345GaussianHdrNM.mat','base=s0423pRF.mat');
-MMExponents = [MMExponents v1Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
-
-
-
-
+%for each subject, get the exponent of the exponential fit between v1 and v3
+for subject = 1:length(subjectList);
+    sprintf('Doing subject %i of %i',subject,length(subjectList))
+    dataStr1 = strcat('data1=', subjectList(subject), 'pRFGaussianHdrNMp1.mat');
+    dataStr2 = strcat('data2=', subjectList(subject), 'pRFGaussianHdrNMp2.mat');
+    baseStr = strcat('base=', subjectList(subject), 'pRFGaussianHdrNMFull.mat');
+    [v1v3Exponent expConfInt] = avgModelNoise(dataStr1{1}, dataStr2{1}, baseStr{1},'graphStuff=0');
+    MMExponents = [MMExponents v1v3Exponent]; MMExponentConfLow = [MMExponentConfLow expConfInt(1)]; MMExponentConfHigh = [MMExponentConfHigh expConfInt(2)]; close all
+end
 
 
 %% plot the data %%
-
 figure, hold on
 
 errorbar(MMExponents,prfExponents,prfExponentConfLow-prfExponents,prfExponentConfHigh-prfExponents,'LineStyle','none','Color','k','CapSize',2) 
@@ -108,91 +66,22 @@ drawPublishAxis('labelFontSize=14','yAxisOffset=-1/25');legend('off');
 
 
 
+%% look at noise correlations between different scans with shufflecor %%
+%initialize empty arrays
+shuffleV1V3Exponents = [];
+shuffleV1V3ExponentConfLow = [];
+shuffleV1V3ExponentConfHigh = [];
 
+%for each subject, get the exponent of the exponential fit between v1 and v3
+for subject = 1:length(subjectList);
+    sprintf('Doing subject %i of %i',subject,length(subjectList))
+    dataStr1 = strcat('data1=', subjectList(subject), 'pRFGaussianHdrNMp1.mat');
+    dataStr2 = strcat('data2=', subjectList(subject), 'pRFGaussianHdrNMp2.mat');
+    baseStr = strcat('base=', subjectList(subject), 'pRFGaussianHdrNMFull.mat');
+    [v1v3Exponent v1v3ExponentConfInt] = shufflecor(dataStr1{1},dataStr2{1},baseStr{1},'graphStuff=0');
+    shuffleV1V3Exponents = [shuffleV1V3Exponents v1v3Exponent]; shuffleV1V3ExponentConfLow = [shuffleV1V3ExponentConfLow v1v3ExponentConfInt(1)]; shuffleV1V3ExponentConfHigh = [shuffleV1V3ExponentConfHigh v1v3ExponentConfInt(2)]; close all
+end
 
-
-
-
-%% shufflecor %%
-
-shuffleV1Exponents = []; shuffleV1ExponentConfLow = []; shuffleV1ExponentConfHigh = [];
-shuffleV2Exponents = []; shuffleV2ExponentConfLow = []; shuffleV2ExponentConfHigh = [];
-shuffleV3Exponents = []; shuffleV3ExponentConfLow = []; shuffleV3ExponentConfHigh = [];
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0415mc12GaussianNM.mat','data2=s0415mc34GaussianNM.mat','base=s0415mc1234GaussianNM.mat');
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0416mc12GaussianNM.mat','data2=s0416mc34GaussianNM.mat','base=s0416mc1234GaussianNM.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0405mc12GaussianNM.mat','data2=s0405mc34GaussianNM.mat','base=s0405mc1234GaussianNM.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0406mc12GaussianNM.mat','data2=s0406mc34GaussianNM.mat','base=s0406mc1234GaussianNM.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0419mc12GaussianNM.mat','data2=s0419mc34GaussianNM.mat','base=s0419mc1234GaussianNM.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0350mc13GaussianNM.mat','data2=s0350mc48GaussianNM.mat','base=s0350mc1348GaussianNM.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0420mc12GaussianNM.mat','data2=s0420mc34GaussianNM.mat','base=s0420mc1234GaussianNM.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0422mc12GaussianNM.mat','data2=s0422mc34GaussianNM.mat','base=s0422mc1234GaussianNM.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0399mc12GaussianNM','data2=s0399mc345GaussianNM','base=s0399pRF.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0401mc12GaussianNM','data2=s0401mc345GaussianNM','base=s0401pRF.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0403mc12GaussianNM','data2=s0403mc345GaussianNM','base=s0403pRF.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0404mc12GaussianNM','data2=s0404mc345GaussianNM','base=s0404pRF.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-[v1Exponent v1ExponentConfInt v2Exponent v2ExponentConfInt v3Exponent v3ExponentConfInt] = shufflecor('data1=s0423mc678GaussianNM','data2=s0423mc12345GaussianNM','base=s0423pRF.mat')
-shuffleV1Exponents = [shuffleV1Exponents v1Exponent]; shuffleV1ExponentConfLow = [shuffleV1ExponentConfLow v1ExponentConfInt(1)]; shuffleV1ExponentConfHigh = [shuffleV1ExponentConfHigh v1ExponentConfInt(2)]; close all
-shuffleV2Exponents = [shuffleV2Exponents v2Exponent]; shuffleV2ExponentConfLow = [shuffleV2ExponentConfLow v2ExponentConfInt(1)]; shuffleV2ExponentConfHigh = [shuffleV2ExponentConfHigh v2ExponentConfInt(2)]; close all
-shuffleV3Exponents = [shuffleV3Exponents v3Exponent]; shuffleV3ExponentConfLow = [shuffleV3ExponentConfLow v3ExponentConfInt(1)]; shuffleV3ExponentConfHigh = [shuffleV3ExponentConfHigh v3ExponentConfInt(2)]; close all
-
-
-
-
+%plot
 figure; hold on
-errorbar([1:13],shuffleV1Exponents,shuffleV1ExponentConfLow-shuffleV1Exponents,shuffleV1ExponentConfHigh-shuffleV1Exponents,'LineStyle','none','Color','k','CapSize',2)
-errorbar([1:13],shuffleV2Exponents,shuffleV2ExponentConfLow-shuffleV2Exponents,shuffleV2ExponentConfHigh-shuffleV2Exponents,'LineStyle','none','Color','r','CapSize',2)
-errorbar([1:13],shuffleV3Exponents,shuffleV3ExponentConfLow-shuffleV3Exponents,shuffleV3ExponentConfHigh-shuffleV3Exponents,'LineStyle','none','Color','b','CapSize',2)
-
-
-
-keyboard
-
+errorbar([1:length(shuffleV1V3Exponents)],shuffleV1V3Exponents,shuffleV1V3ExponentConfLow-shuffleV1V3Exponents,shuffleV1V3ExponentConfHigh-shuffleV1V3Exponents,'LineStyle','none','Color','k','CapSize',2)
