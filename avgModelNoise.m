@@ -17,7 +17,8 @@
 %   Usage: [scanA, scanB, additiveFit, fullFit] = avgModelNoise('data1=s0403mc345GaussianHdrNM.mat','data2=s0403mc12GaussianHdrNM.mat','base=s0403prf.mat');
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function [scanA, scanB, additiveFit, fullFit] = avgModelNoise(varargin);       
+%function [scanA, scanB, additiveFit] = avgModelNoise(varargin);
+function [v1v3Exponent v1v3ExponentConfInt] = avgModelNoise(varargin);
 
 
 
@@ -31,14 +32,21 @@ function [scanA, scanB, additiveFit, fullFit] = avgModelNoise(varargin);
 
 getArgs(varargin);
 
+if ~exist('graphStuff');graphStuff=0;end
+
+global graphStuff
+
 load(data1);
 roisA = rois;
 load(data2);
 roisB = rois;
 load(base,'rois','cleanRois');
 
-
 % get the other scan clean rois
+ %% The way you get the voxels you want here is by checking what voxels are included in the base pRF 'cleanROIs' structure.
+ %% that way, you are filtering voxels based off the parameters from the best prf fit (most scans) and can use the same voxels
+ %% when comparing different numbers of scans.
+
 for roi = 1:length(rois)
 cleanRoisA(roi).vox.linearCoords = roisA(roi).vox.linearCoords(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
 cleanRoisA(roi).vox.rfHalfWidth = roisA(roi).vox.rfHalfWidth(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
@@ -54,8 +62,9 @@ cleanRoisA(roi).vox.rfstd = roisA(roi).vox.params(3,ismember(rois(roi).vox.linea
 cleanRoisA(roi).vox.pRFtSeries = roisA(roi).vox.pRFtSeries(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
 cleanRoisA(roi).vox.scanCoords = roisA(roi).scanCoords(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
 cleanRoisA(roi).nVoxels = length(cleanRoisA(roi).vox.linearCoords);
-cleanRoisA(roi).nFrames = length(cleanRoisA(roi).vox.pRFtSeries(:,1))
+cleanRoisA(roi).nFrames = length(cleanRoisA(roi).vox.pRFtSeries(:,1));
 end
+
 
 for roi = 1:length(rois)
 cleanRoisB(roi).vox.linearCoords = roisB(roi).vox.linearCoords(ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
@@ -72,7 +81,7 @@ cleanRoisB(roi).vox.rfstd = roisB(roi).vox.params(3,ismember(rois(roi).vox.linea
 cleanRoisB(roi).vox.pRFtSeries = roisB(roi).vox.pRFtSeries(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
 cleanRoisB(roi).vox.scanCoords = roisB(roi).scanCoords(:,ismember(rois(roi).vox.linearCoords,cleanRois(roi).vox.linearCoords));
 cleanRoisB(roi).nVoxels = length(cleanRoisB(roi).vox.linearCoords);
-cleanRoisB(roi).nFrames = length(cleanRoisB(roi).vox.pRFtSeries(:,1))
+cleanRoisB(roi).nFrames = length(cleanRoisB(roi).vox.pRFtSeries(:,1));
 end
 
 
@@ -89,12 +98,13 @@ scanA(roi).nVoxels = cleanRoisA(roi).nVoxels;scanB(roi).nVoxels = cleanRoisB(roi
 scanA(roi).nFrames = cleanRoisA(roi).nFrames;scanB(roi).nFrames = cleanRoisB(roi).nFrames;
 end
 
-keyboard
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Multiplicative noise fitting %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+doMulti=0
+if doMulti
 
 %% Fit additive noise to fixed multiplicative scaling values and plot log likelihoods %%
 
@@ -102,7 +112,7 @@ keyboard
 startparams(1) = 1;
 opts = optimset('display','off','maxIter',1000000,'MaxFunEvals',1000000,'DiffMinChange',0);
 minsearch = [0]; maxsearch = [inf];
-multiplicativeScales = -1:1:1;
+multiplicativeScales = -1:.02:1;
 
 % go through each roi and voxel individually
 for roi = 1:length(scanA)
@@ -124,14 +134,14 @@ end %rois
 
 
 %% graph the log likelihoods for each voxel at each multi scale %%
-gcf = imgcf;
+gcf = imgcf; zerovals = [];
 
 % go through every roi
 for roi = 1:length(scanA)
 subplot(1,length(scanA),roi); averageResiduals = 0; hold on;
 
 % start count for total graphed voxels and set the r2 cutoff you want to graph
-graphMinCutoff = .6; graphMaxCutoff=1; totalGraphedVoxels = 0;
+graphMinCutoff = .3; graphMaxCutoff=1; totalGraphedVoxels = 0;
 
 % plot voxels with r2 greater than graphCutoff and tally number of plotted voxels
 for voxel = 1:scanA(roi).nVoxels
@@ -149,6 +159,7 @@ for voxel = 1:scanA(roi).nVoxels
         averageResiduals = averageResiduals + cell2mat(additiveFit(roi).residual{voxel})-zerovalue;
         totalGraphedVoxels = totalGraphedVoxels+1;
 
+        zerovals = [zerovals find(cell2mat(additiveFit(roi).residual{voxel})==min(cell2mat(additiveFit(roi).residual{voxel})))];
     end %cutoff check
 end %voxel iteration
 
@@ -156,11 +167,18 @@ end %voxel iteration
 plot(additiveFit(roi).multiplicativeScales,averageResiduals/totalGraphedVoxels,'lineWidth',4,'color',[0 0 0])
 xlabel('Multiplicative Noise Scale'),ylabel('Log likelihood difference from 0 scale'),title(sprintf('%s Log likelihoods',roiNames{roi})),
 plot([min(additiveFit(1).multiplicativeScales) max(additiveFit(1).multiplicativeScales)],[0 0],'r');
-ylim([-10 60]);
+ylim([-10 45]);
 drawPublishAxis('labelFontSize=14');legend('off');
 end
 set(gcf,'renderer','Painters')
 set(gcf,'Position', [58.7375 5.22111111111111 30.8680555555556 20.6022222222222]);
+
+% plot histogram of values
+j = length(additiveFit(1).multiplicativeScales);
+imgcf,histogram((zerovals-j/2)/(j/2),25);xlim([-.8 .8]);
+xlabel('Best-fit multiplicate scale value (B)');ylabel('Number of voxels');title('Multiplicative scale fits')
+drawPublishAxis('labelFontSize=14');legend('off');
+set(gcf,'renderer','Painters')
 
 
 %% graph the std of the noise at binned activity levels %%
@@ -211,29 +229,6 @@ for roi = 1:length(scanA)
     xlabel(['pRF activity bin']),ylabel('Std of residuals'); title(sprintf('Std of residuals by activity level: %S',roiNames{roi}));
 
 end % roi iteration
-
-
-
-%% find best parameters for every voxel, fitting additive noise and multiplicative scaling %%
-
-% parse arguments 
-startparams(1) = .1; startparams(2) = 0;
-opts = optimset('display','off','maxIter',100000,'MaxFunEvals',100000);
-minsearch = [0 -inf]; maxsearch = [inf inf];
-
-% go through each voxel individually
-for roi = 1:length(scanA)
-for voxel = 1:scanA(roi).nVoxels;
-
-    % fit the additive noise component and multiplicative scaling to find log likelihood
-     [params, resnorm, residual, exitflag, output, lambda, jacobian] = ... 
-         lsqnonlin(@fitNoiseParameters,startparams,minsearch,maxsearch,opts,scanA,scanB,voxel,roi,1,0,0); 
-         [a, MSGID] = lastwarn(); warning('off', MSGID); %turn off LM warning
-
-    % save the parameters, likelihoods, exit flag, jacobian
-    fullFit(roi).parameters{voxel} = params; fullFit(roi).resnorms{voxel} = resnorm; fullFit(roi).residual{voxel} = residual(1)-100000; fullFit(roi).exitflag{voxel} = exitflag; fullFit(roi).output{voxel} = output; fullFit(roi).lambda{voxel} = lambda; fullFit(roi).jacobian{voxel} = jacobian;
-end %voxel iteration
-end %roi iteration  
 
 
 
@@ -377,6 +372,10 @@ set(gcf,'Position', [58.7375 5.22111111111111 30.8680555555556 20.6022222222222]
 
 
 
+end
+
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Mean model correlations in different areas %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -386,7 +385,8 @@ roi = 1; for row = 1:length(scanA(roi).r2)
     for column = 1:length(scanA(roi).r2)   
         mu1 = 0; s1 = scanA(roi).std(column); s2 = scanA(roi).std(row);
         mu2 = sqrt((scanA(roi).x(column)-scanA(roi).x(row))^2 + (scanA(roi).y(column)-scanA(roi).y(row))^2);
-        if mu1 == mu2 & s1 == s2; v1rfOverlap(row,column) = 1;else;
+        if mu1 == mu2 & s1 == s2; v1rfOverlap(row,column) = 1;
+        elseif s1 < 0 || s2 < 0; v1rfOverlap(row,column) = 1; else %takes out voxels with negative std fits because we filter out the full overlaps later
         c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
         v1rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
@@ -398,7 +398,8 @@ roi = 2; for row = 1:length(scanA(roi).r2)
     for column = 1:length(scanA(roi).r2)   
         mu1 = 0; s1 = scanA(roi).std(column); s2 = scanA(roi).std(row);
         mu2 = sqrt((scanA(roi).x(column)-scanA(roi).x(row))^2 + (scanA(roi).y(column)-scanA(roi).y(row))^2);
-        if mu1 == mu2 & s1 == s2; v2rfOverlap(row,column) = 1;else;
+        if mu1 == mu2 & s1 == s2; v2rfOverlap(row,column) = 1;
+        elseif s1 < 0 || s2 < 0; v2rfOverlap(row,column) = 1; else %takes out voxels with negative std fits because we filter out the full overlaps later
         c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
         v2rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
@@ -410,7 +411,8 @@ roi = 3; for row = 1:length(scanA(roi).r2)
     for column = 1:length(scanA(roi).r2)   
         mu1 = 0; s1 = scanA(roi).std(column); s2 = scanA(roi).std(row);
         mu2 = sqrt((scanA(roi).x(column)-scanA(roi).x(row))^2 + (scanA(roi).y(column)-scanA(roi).y(row))^2);
-        if mu1 == mu2 & s1 == s2; v3rfOverlap(row,column) = 1;else;
+        if mu1 == mu2 & s1 == s2; v3rfOverlap(row,column) = 1;
+        elseif s1 < 0 || s2 < 0; v3rfOverlap(row,column) = 1; else %takes out voxels with negative std fits because we filter out the full overlaps later
         c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
         v3rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
@@ -422,7 +424,8 @@ v3rfOverlap = v3rfOverlap.*100;
     for column = 1:length(scanA(3).r2)   
         mu1 = 0; s1 = scanA(3).std(column); s2 = scanA(1).std(row);
         mu2 = sqrt((scanA(3).x(column)-scanA(1).x(row))^2 + (scanA(3).y(column)-scanA(1).y(row))^2);
-        if mu1 == mu2 & s1 == s2; v1v3rfOverlap(row,column) = 1;else;
+        if mu1 == mu2 & s1 == s2; v1v3rfOverlap(row,column) = 1;
+        elseif s1 < 0 || s2 < 0; v1v3rfOverlap(row,column) = 1; else %takes out voxels with negative std fits because we filter out the full overlaps later
         c = (mu2*(s1^2) - s2*(mu1*s2 + s1 * sqrt((mu1 - mu2)^2 + 2*(s1^2 - s2^2)*log(s1/s2))))/(s1^2-s2^2);
         v1v3rfOverlap(row,column) = 1 - normcdf(c,mu1,s1) + normcdf(c,mu2,s2); end;
     end
@@ -460,10 +463,9 @@ fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBou
 
 legend('Exponential Fit');
 title('V1 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)'); ylim([-.4 1]);
+if graphStuff, drawPublishAxis('labelFontSize=14'), end %set(gcf,'renderer','Painters')
 
-drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
-
-leg = legend([v1expFit legendColor],'Exponential Fit', 'Bootstrapped Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+leg = legend([v1expFit legendColor],'Exponential Fit', 'Permuted Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
 
 % second, do v2 %
 v2rfOverlapArr = reshape(v2rfOverlap,[1 length(v2rfOverlap)^2]); v2NoiseCorArr = reshape(v2NoiseCor,[1 length(v2NoiseCor)^2]);
@@ -487,9 +489,9 @@ fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBou
 legend('Exponential Fit');
 title('V2 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)');ylim([-.4 1]);
 
-drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+if graphStuff, drawPublishAxis('labelFontSize=14'), end;%set(gcf,'renderer','Painters')
 
-leg = legend([v2expFit legendColor],'Exponential Fit', 'Bootstrapped Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+leg = legend([v2expFit legendColor],'Exponential Fit', 'Permuted Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
 
 % third, do v3 %
 v3rfOverlapArr = reshape(v3rfOverlap,[1 length(v3rfOverlap)^2]); v3NoiseCorArr = reshape(v3NoiseCor,[1 length(v3NoiseCor)^2]);
@@ -513,9 +515,9 @@ fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBou
 legend('Exponential Fit');
 title('V3 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)');ylim([-.4 1]);
 
-drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+if graphStuff, drawPublishAxis('labelFontSize=14'), end;%set(gcf,'renderer','Painters')
 
-leg = legend([v3expFit legendColor],'Exponential Fit', 'Bootstrapped Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
+leg = legend([v3expFit legendColor],'Exponential Fit', 'Permuted Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
 
 %between v1 and v3
 v1v3rfOverlapArr = reshape(v1v3rfOverlap,[1 min(size(v1v3rfOverlap))*max(size(v1v3rfOverlap))]);
@@ -539,18 +541,20 @@ confInt = confint(expFit);
 lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
 fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
 
+%expFit = fit(v1v3rfOverlapArr',v1v3NoiseCorArr','a*exp(b*x)+c');
+v1v3Exponent = expFit.b;
+v1v3ExponentConfInt = confint(expFit);
+v1v3ExponentConfInt = v1v3ExponentConfInt(:,2);
+
 legend('Exponential Fit');
 title('V1/V3 residual correlations'); xlabel('Receptive field overlap between voxels (percent)'); ylabel('Residual correlation between voxels (Pearson r)');ylim([-.4 1]);
 
-drawPublishAxis('labelFontSize=14');set(gcf,'renderer','Painters')
+if graphStuff, drawPublishAxis('labelFontSize=14'), end;%set(gcf,'renderer','Painters')
 
-leg = legend([v1v3expFit legendColor],'Exponential Fit', 'Bootstrapped Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
-
-
+leg = legend([v1v3expFit legendColor],'Exponential Fit', 'Permuted Fits'); leg.Position = [0.17 .77 0.2685 0.1003];
 
 
 
-keyboard
 
 
 
@@ -560,6 +564,8 @@ keyboard
 %% getFitConfidenceInterval %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function getFitConfidenceInterval(correlationArray,overlapArray);
+
+global graphStuff
 
 numBootstraps = 50;
 
@@ -573,9 +579,10 @@ for bootstrap = 1:numBootstraps;
     expFitMax(bootstrap) = expFit.a*exp(expFit.b);
     
     legend('off');
+    if graphStuff
     shuffleFit = plot(expFit);
     shuffleFit.Color = [.3, .5, .3 .05]; shuffleFit.LineWidth = 3;
-
+    end
 end
 
 [expFitA, sortOrder] = sort(expFitA);
@@ -589,21 +596,54 @@ expFitMax = expFitMax(sortOrder);
 %%%%%%%%%%%%%%%%%%%%%%%%
 function logLikelihood = fitNoiseParameters(params,scanA,scanB,voxel,roi,fitAll,additiveFit,multiplicativeScale)
 
+zScoreResidual = 1;
+
 % Parsing parameters and get tseries length
 if fitAll;additiveNoiseStd = params(1); multiplicativeNoiseScale = params(2); end
 if additiveFit; additiveNoiseStd = params(1); multiplicativeNoiseScale = multiplicativeScale; end
 timeSeriesLength = scanA(roi).nFrames;
 
 % get residual T series as mean model Tseries - measured single Tseries
-residualTSeries = scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:);
+if zScoreResidual
+residualTSeries = (zscore(scanA(roi).tSeries(voxel,:)) - zscore(scanB(roi).tSeries(voxel,:)))/100;
+else
+residualTSeries = (scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:));
+end
 
 % calculated the multiplicative noise series scaled by the pRF-predicted response (zerod by min of prf prediction)
 shiftedpRFtSeries = (scanA(roi).pRFtSeries(voxel,:)-min(scanA(roi).pRFtSeries(voxel,:)));
+
+shiftedpRFtSeries = sqrt(shiftedpRFtSeries*100)/100; %% POISSON ADJUSTMENT
+
 multiplicativeNoiseSeries = multiplicativeNoiseScale*shiftedpRFtSeries*std(residualTSeries)/(max(shiftedpRFtSeries));
 
-% calculate Std at every time point as a function of the model BOLD activity. Second term is a variance term, so take the sqrt (poisson mean-variance relationship) (took out for now)
+% calculate Std at every time point as a function of the model BOLD activity.
 noiseStdTimeSeries = additiveNoiseStd*ones(1,timeSeriesLength) + multiplicativeNoiseSeries;
 % compute the likelihood of each residual time point %
 logLikelihood = sum(-log(normpdf(residualTSeries,0,noiseStdTimeSeries)))+10000;
 
 
+
+
+
+
+function graphAvgStd
+
+roi=1;voxel=1;
+shiftedpRFtSeries = (scanA(roi).pRFtSeries(voxel,:)-min(scanA(roi).pRFtSeries(voxel,:)));
+
+stdTimeSeries = 0;
+
+for roi = 1:3
+    for voxel = 1:scanA(roi).nVoxels
+        bestScale = find(cell2mat(additiveFit(roi).residual{voxel})==min(cell2mat(additiveFit(roi).residual{voxel})));
+
+        j = length(additiveFit(1).multiplicativeScales);
+        bestScale = (bestScale-j/2)/(j/2);
+
+        residualTSeries = (scanA(roi).tSeries(voxel,:) - scanB(roi).tSeries(voxel,:));
+        multiplicativeNoiseSeries = bestScale*shiftedpRFtSeries*std(residualTSeries)/(max(shiftedpRFtSeries));
+        
+        stdTimeSeries = stdTimeSeries + multiplicativeNoiseSeries;
+    end
+end
