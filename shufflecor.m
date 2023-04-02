@@ -16,14 +16,17 @@
 
  
 
-function [v1v3Exponent v1v3ExponentConfInt] = shufflecor(varargin)       
+function [v1Exponent, v1ExponentConfInt, ...
+    v2Exponent, v2ExponentConfInt,...
+    v3Exponent, v3ExponentConfInt, ...
+    v1v3Exponent, v1v3ExponentConfInt] = shufflecor(varargin)       
 
 %%%%%%%%%%%%%%%%%%%
 %% Get Arguments %%
 %%%%%%%%%%%%%%%%%%%
 
 
-graphStuff = 1;
+graphStuff = 0;
 
 %%%%%%%%%%%%%%%
 %% Load data %%
@@ -159,15 +162,15 @@ v1v3NoiseCor = (v1v3NoiseCorP1 + v1v3NoiseCorP1)/2;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % noise and receptive field correlation %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-options = fitoptions('Method', 'NonlinearLeastSquares','Lower',[0 -inf], 'Upper',[inf 20]);
+%options = fitoptions('Method', 'NonlinearLeastSquares','Lower',[0 -10], 'Upper',[inf 20]);
 % first, do v1 %
 v1rfOverlapArr = reshape(v1rfOverlap,[1 min(size(v1rfOverlap))*max(size(v1rfOverlap))]);
 v1NoiseCorArr = reshape(v1NoiseCor,[1 min(size(v1NoiseCor))*max(size(v1NoiseCor))]);
 [v1rfOverlapArr,sortOrder] = sort(v1rfOverlapArr); v1NoiseCorArr = v1NoiseCorArr(sortOrder);
 
-%v1NoiseCorArr(v1rfOverlapArr==1) = []; v1rfOverlapArr(v1rfOverlapArr==1) = [];
+v1rfOverlapArr = log10(v1rfOverlapArr + 1);
+%v1NoiseCorArr = log10(v1NoiseCorArr + 2);
 
-%v1NoiseCorArr(v1rfOverlapArr==100) = []; v1rfOverlapArr(v1rfOverlapArr==100) = [];
 %keyboard
 figure(11); hold on; scatter(v1rfOverlapArr,v1NoiseCorArr,1,'filled','k');
 
@@ -175,13 +178,13 @@ figure(11); hold on; scatter(v1rfOverlapArr,v1NoiseCorArr,1,'filled','k');
 [meanExponent stdExponent] = getFitConfidenceInterval(v1NoiseCorArr',v1rfOverlapArr');
 
 
-expFit = fit(v1rfOverlapArr',v1NoiseCorArr','exp1',options);
+expFit = fit(v1rfOverlapArr',v1NoiseCorArr','a + b*exp(x)');
 legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
 v1expFit = plot(expFit); v1expFit.Color = [0, 0.4470, 0.7410]; v1expFit.LineWidth = 2;
 %confidence internal
 confInt = confint(expFit);
-lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
-fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
+lowerFitBound = @(x) confInt(1,1)+confInt(1,2)*exp(x); upperFitBound = @(x) confInt(2,1)+confInt(2,2)*exp(x);
+fplot(lowerFitBound,[0,2],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,2],'--','color',[0, 0.4470, 0.7410]);
 
 %expFit = fit(v1rfOverlapArr',v1NoiseCorArr','a*exp(b*x)+c');
 v1Exponent = expFit.b;
@@ -202,18 +205,21 @@ v2rfOverlapArr = reshape(v2rfOverlap,[1 min(size(v2rfOverlap))*max(size(v2rfOver
 v2NoiseCorArr = reshape(v2NoiseCor,[1 min(size(v2NoiseCor))*max(size(v2NoiseCor))]);
 [v2rfOverlapArr,sortOrder] = sort(v2rfOverlapArr); v2NoiseCorArr = v2NoiseCorArr(sortOrder);
 
+v2rfOverlapArr = log10(v2rfOverlapArr + 1);
+%v2NoiseCorArr = log10(v2NoiseCorArr + 2);
+
 figure(12); hold on; scatter(v2rfOverlapArr,v2NoiseCorArr,1,'filled','k');
 
 %bootstrap
 getFitConfidenceInterval(v2NoiseCorArr',v2rfOverlapArr');
 
-expFit = fit(v2rfOverlapArr',v2NoiseCorArr','exp1',options);
+expFit = fit(v2rfOverlapArr',v2NoiseCorArr','a + b*exp(x)');
 legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
 v2expFit = plot(expFit); v2expFit.Color = [0, 0.4470, 0.7410]; v2expFit.LineWidth = 2;
 %confidence internal
 confInt = confint(expFit);
-lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
-fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
+lowerFitBound = @(x) confInt(1,1)+confInt(1,2)*exp(x); upperFitBound = @(x) confInt(2,1)+confInt(2,2)*exp(x);
+fplot(lowerFitBound,[0,2],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,2],'--','color',[0, 0.4470, 0.7410]);
 
 %expFit = fit(v2rfOverlapArr',v2NoiseCorArr','a*exp(b*x)+c');
 v2Exponent = expFit.b;
@@ -234,20 +240,21 @@ v3rfOverlapArr = reshape(v3rfOverlap,[1 min(size(v3rfOverlap))*max(size(v3rfOver
 v3NoiseCorArr = reshape(v3NoiseCor,[1 min(size(v3NoiseCor))*max(size(v3NoiseCor))]);
 [v3rfOverlapArr,sortOrder] = sort(v3rfOverlapArr); v3NoiseCorArr = v3NoiseCorArr(sortOrder);
 
-v3NoiseCorArr(v3rfOverlapArr==100) = []; v3rfOverlapArr(v3rfOverlapArr==100) = [];
+v3rfOverlapArr = log10(v3rfOverlapArr + 1);
+%v3NoiseCorArr = log10(v3NoiseCorArr + 2);
 
 figure(13); hold on; scatter(v3rfOverlapArr,v3NoiseCorArr,1,'filled','k');
 
 %bootstrap
 getFitConfidenceInterval(v3NoiseCorArr',v3rfOverlapArr');
 
-expFit = fit(v3rfOverlapArr',v3NoiseCorArr','exp1',options);
+expFit = fit(v3rfOverlapArr',v3NoiseCorArr','a + b*exp(x)');
 legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
 v3expFit = plot(expFit); v3expFit.Color = [0, 0.4470, 0.7410]; v3expFit.LineWidth = 2;
 %confidence internal
 confInt = confint(expFit);
-lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
-fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
+lowerFitBound = @(x) confInt(1,1)+confInt(1,2)*exp(x); upperFitBound = @(x) confInt(2,1)+confInt(2,2)*exp(x);
+fplot(lowerFitBound,[0,2],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,2],'--','color',[0, 0.4470, 0.7410]);
 
 %expFit = fit(v3rfOverlapArr',v3NoiseCorArr','a*exp(b*x)+c');
 v3Exponent = expFit.b;
@@ -273,18 +280,21 @@ v1v3NoiseCorArr(v1v3rfOverlapArr==100) = []; v1v3rfOverlapArr(v1v3rfOverlapArr==
 v1v3NoiseCorArr(isnan(v1v3rfOverlapArr))=[];
 v1v3rfOverlapArr(isnan(v1v3rfOverlapArr))=[];
 
+v1v3rfOverlapArr = log10(v1v3rfOverlapArr + 1);
+%v1v3NoiseCorArr = log10(v1v3NoiseCorArr + 2);
+
 figure(15); hold on; scatter(v1v3rfOverlapArr,v1v3NoiseCorArr,1,'filled','k');
 
 %bootstrap
 [meanExponent stdExponent] = getFitConfidenceInterval(v1v3NoiseCorArr',v1v3rfOverlapArr');
 
-expFit = fit(v1v3rfOverlapArr',v1v3NoiseCorArr','exp1',options);
+expFit = fit(v1v3rfOverlapArr',v1v3NoiseCorArr','a + b*exp(x)');
 legendColor = plot(expFit); legendColor.Color = [.3, .5, .3]; legendColor.LineWidth = 2;
 v1v3expFit = plot(expFit); v1v3expFit.Color = [0, 0.4470, 0.7410]; v1v3expFit.LineWidth = 2;
 %confidence internal
 confInt = confint(expFit);
-lowerFitBound = @(x) confInt(1,1)*exp(confInt(1,2)*x); upperFitBound = @(x) confInt(2,1)*exp(confInt(2,2)*x);
-fplot(lowerFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,100],'--','color',[0, 0.4470, 0.7410]);
+lowerFitBound = @(x) confInt(1,1)+confInt(1,2)*exp(x); upperFitBound = @(x) confInt(2,1)+confInt(2,2)*exp(x);
+fplot(lowerFitBound,[0,2],'--','color',[0, 0.4470, 0.7410]); fplot(upperFitBound,[0,2],'--','color',[0, 0.4470, 0.7410]);
 
 %expFit = fit(v1v3rfOverlapArr',v1v3NoiseCorArr','a*exp(b*x)+c');
 v1v3Exponent = expFit.b;
@@ -324,8 +334,13 @@ leg = legend([v1v3expFit legendColor],'Exponential Fit', 'Permuted Fits'); leg.P
 %% getFitConfidenceInterval %%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [meanExponent stdExponent] = getFitConfidenceInterval(correlationArray,overlapArray);
+
 global graphStuff
-numBootstraps = 50;
+numBootstraps = 1;
+if graphStuff
+    %do more boostraps if actually making figures
+    numBootstraps = 50;
+end
 
 expFitA = zeros(1,numBootstraps); expFitB = zeros(1,numBootstraps); expFitMax = zeros(1,numBootstraps);
 
